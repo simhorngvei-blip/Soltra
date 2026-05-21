@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+:root {
+  /* AI Overseer Palette (Persona Hub Inspired) */
+  --hud-bg: #000000;
+  --hud-primary: #ff2a2a; /* Industrial Red */
+  --hud-secondary: #00d9ff; /* Cyber Cyan */
+  --hud-primary-dim: rgba(255, 42, 42, 0.2);
+  --hud-secondary-dim: rgba(0, 217, 255, 0.2);
+  --hud-border: rgba(0, 217, 255, 0.4);
+  --hud-text: #ffffff;
+  --hud-text-muted: #80B28A;
+  --hud-glow: rgba(255, 42, 42, 0.4);
+}
+
+/* ─── Global reset ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Anton', sans-serif;
+  background: var(--hud-bg);
+  color: var(--hud-text);
+  letter-spacing: 1px;
+}
+
+/* Monospace default for specific data elements */
+.font-mono {
+  font-family: 'Space Mono', monospace;
+}
+
+/* Tailwind's ping animation (used for status dot) */
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}

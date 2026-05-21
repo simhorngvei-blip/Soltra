@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  
+  --primary: #00d9ff;
+  --primary-foreground: #000000;
+  
+  --accent: #ff2a2a;
+  --accent-foreground: #ffffff;
+  
+  --muted: #0a0a0a;
+  --muted-foreground: #666666;
+  
+  --border: #1a1a1a;
+  --input: #1a1a1a;
+  --ring: #00d9ff;
+
+  --radius: 4px; /* Keeping it sharp as per .cursorrules */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  
+  --font-sans: var(--font-bebas);
+  --font-mono: var(--font-jetbrains);
+
+  @keyframes spotlight {
+    0% {
+      opacity: 0;
+      transform: translate(-72%, -62%) scale(0.5);
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -40%) scale(1);
+    }
+  }
+  --animate-spotlight: spotlight 2s ease .75s 1 forwards;
+}
+
+html.lenis {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-jetbrains), monospace;
+}
+
+/* Grain Overlay - Inspired by ownitt.fr */
+.grain-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.05;
+}
+
+/* Bento Grid Utilities */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 200px;
+  gap: 16px;
+}
+
+.bento-card {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  overflow: hidden;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: var(--radius);
+}
+
+/* Impact Typography */
+.text-impact {
+  font-family: var(--font-bebas);
+  text-transform: uppercase;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+}

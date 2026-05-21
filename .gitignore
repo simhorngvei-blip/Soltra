@@ -1,0 +1,63 @@
+# ─── Dependencies ───────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+bun.lock
+
+# ─── Build Outputs ───────────────────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+
+# ─── Environment Variables ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# ─── Databases & Runtime Data ────────────────────────────────────────────────
+experiments/data/voicebox.db
+*.db
+*.sqlite
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ─── OS & Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ─── Arduino / Embedded ──────────────────────────────────────────────────────
+hardware/**/.cache/
+hardware/**/build/
+
+# ─── Large Binary Assets (use Git LFS or external storage) ───────────────────
+# VRM 3D avatar models (400MB+ each)
+*.vrm
+# Large video backgrounds (>50MB)
+software/soltra-hud/src/assets/Mainn.mp4
+software/soltra-hud/src/assets/main2.mp4
+software/soltra-hud/src/assets/main3.mp4
+# Audio reference files
+software/soltra-tts/profiles/**/reference.wav
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Lock files (committed per sub-project, not root) ────────────────────────
+package-lock.json

@@ -1,0 +1,139 @@
+/* ─── AI Overseer HUD Specific Styles (Persona Hub Port) ─── */
+
+.scanline-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+  background-size: 100% 4px;
+  opacity: 0.3;
+}
+
+.hud-panel {
+  background: rgba(0, 10, 20, 0.75);
+  backdrop-filter: blur(8px);
+  border-left: 4px solid var(--hud-primary);
+  border-bottom: 1px solid var(--hud-border);
+  padding: 20px;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 2px;
+  color: var(--hud-secondary);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hud-panel-skew-left {
+  transform: skewX(-10deg);
+}
+
+.hud-panel-skew-right {
+  transform: skewX(10deg);
+}
+
+/* Mechanical Crosshair Corners */
+.crosshair-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  color: var(--hud-primary);
+}
+
+.cap-tl { top: -4px; left: -4px; }
+.cap-tr { top: -4px; right: -4px; }
+.cap-bl { bottom: -4px; left: -4px; }
+.cap-br { bottom: -4px; right: -4px; }
+
+.hud-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 2px solid var(--hud-secondary);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  font-style: italic;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.hud-data-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0px;
+}
+
+.hud-data-label {
+  color: #fff;
+  opacity: 0.8;
+}
+
+.hud-data-value {
+  color: var(--hud-secondary);
+  font-weight: bold;
+}
+
+/* Mechanical Hardware Switch */
+.hud-switch {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 6px 10px;
+  font-family: 'Anton', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+}
+
+.hud-switch:hover {
+  background: var(--hud-secondary-dim);
+  border-color: var(--hud-secondary);
+  color: var(--hud-secondary);
+}
+
+.hud-switch.active {
+  background: var(--hud-secondary-dim);
+  border-color: var(--hud-secondary);
+  color: var(--hud-secondary);
+  box-shadow: 0 0 10px var(--hud-secondary-dim);
+}
+
+/* Dashboard Specific: Send Button */
+.hud-btn-send {
+  background: var(--hud-primary);
+  color: #fff;
+  border: none;
+  font-family: 'Anton', sans-serif;
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 0 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.hud-btn-send:hover {
+  background: #fff;
+  color: var(--hud-primary);
+  box-shadow: 0 0 15px var(--hud-glow);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 217, 255, 0.05);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--hud-secondary);
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #fff;
+}

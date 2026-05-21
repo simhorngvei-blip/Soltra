@@ -1,0 +1,62 @@
+[gd_scene load_steps=6 format=3 uid="uid://7jd276bkardh"]
+
+[ext_resource type="Script" uid="uid://brepfdhmjob7j" path="res://data/ui/tooltip_ui/tooltip_ui.gd" id="1_788ty"]
+[ext_resource type="FontFile" uid="uid://b4aaxiw3j538g" path="res://assets/fonts/Montserrat/static/Montserrat-SemiBoldItalic.ttf" id="2_3nw3a"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_788ty"]
+font = ExtResource("2_3nw3a")
+font_size = 32
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.54902)
+shadow_size = 0
+
+[sub_resource type="LabelSettings" id="LabelSettings_3nw3a"]
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.54902)
+shadow_size = 0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3nw3a"]
+bg_color = Color(1, 1, 1, 1)
+border_width_top = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+shadow_color = Color(0, 0, 0, 0.54902)
+shadow_size = 2
+
+[node name="TooltipUI" type="Control"]
+z_index = 100
+layout_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("1_788ty")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+offset_left = -112.0
+offset_top = -136.0
+offset_right = -41.0
+offset_bottom = -96.0
+pivot_offset = Vector2(71, 40)
+text = "Title"
+label_settings = SubResource("LabelSettings_788ty")
+
+[node name="SubTitleContainer" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = -112.0
+offset_top = -96.0
+offset_bottom = -56.0
+
+[node name="SubTitle" type="Label" parent="SubTitleContainer"]
+layout_mode = 2
+text = "Sub"
+label_settings = SubResource("LabelSettings_3nw3a")
+
+[node name="HSeparator" type="HSeparator" parent="SubTitleContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/separator = SubResource("StyleBoxFlat_3nw3a")
