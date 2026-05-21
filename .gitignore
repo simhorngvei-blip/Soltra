@@ -61,3 +61,6 @@ yarn-error.log*
 
 # ─── Lock files (committed per sub-project, not root) ────────────────────────
 package-lock.json
+
+# --- Private / Sensitive -------------------------------------------------------
+Helios_Final_Report/
