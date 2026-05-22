@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useEffect, Suspense, useRef, useMemo, useState } from 'react'
 import { Canvas, useFrame, useLoader } from '@react-three/fiber'
@@ -179,10 +179,12 @@ export function VRMScene({ url, animUrl }: { url: string; animUrl: string }) {
     <div className="w-full h-full min-h-[400px]">
       <Canvas camera={{ position: [0, 0, 2.5], fov: 35 }}>
         <Suspense fallback={<SimpleLoader />}>
-          <Stage intensity={0.6} environment="city" adjustCamera={false}>
+          <ambientLight intensity={0.8} />
+          <directionalLight position={[5, 5, 5]} intensity={1.5} />
+          <pointLight position={[-5, 5, -5]} intensity={1} color="#00ffff" />
+          <Stage intensity={0} adjustCamera={false} environment={null}>
             <Model url={url} animUrl={animUrl} />
           </Stage>
-          <Environment preset="city" />
         </Suspense>
       </Canvas>
     </div>
