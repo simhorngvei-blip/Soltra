@@ -7,13 +7,12 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data: blob: https:;
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.open-meteo.com https://*.spline.design;
+  connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.open-meteo.com https://*.spline.design;
   frame-src https://js.stripe.com;
   worker-src 'self' blob:;
   object-src 'none';
   base-uri 'self';
   form-action 'self';
-  upgrade-insecure-requests;
 `
 
 const securityHeaders = [
@@ -37,6 +36,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  reactStrictMode: false,
   async headers() {
     return [
       {

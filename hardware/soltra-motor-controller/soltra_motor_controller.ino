@@ -1,4 +1,4 @@
-﻿/* 
+/* 
  * PROJECT SOLTRA - ESP32 Dev Kit V1
  * 
  * Hardware Connections:
@@ -50,8 +50,8 @@ bool wasError(const char* errorTopic = "") {
     return false;
 }
 
-// Ensure AD0 pin on MPU6050 is wired to 3.3V for 0x69
-MPU6050 mpu(0x69); 
+// 5-pin MPU6050 usually defaults to 0x68 address (no AD0 pin exposed)
+MPU6050 mpu(0x68); 
 
 // --- ESP32 Dev Kit V1 Pin Definitions ---
 const int sensorpin = 34; // ESP32 ADC pin (Analog input)
@@ -78,6 +78,11 @@ const int Deg2 = 0;
 const int Deg3 = 75;
 
 #define OUTPUT_READABLE_YAWPITCHROLL
+
+// Motor & Test State Machine
+enum TestState { TEST_IDLE, TEST_RETRACT, TEST_EXTEND };
+TestState currentTestState = TEST_IDLE;
+unsigned long testStartTime = 0;
 
 // MPU control variables
 bool dmpReady = false;
@@ -258,9 +263,14 @@ void loop() {
         break;
       case 's':
       case 'S':
+        currentTestState = TEST_IDLE; // Cancel any running test
         Serial.println(F("### ALL MOTORS STOPPED ###"));
         digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
         digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+        break;
+      case 't':
+      case 'T':
+        startDirectionControl();
         break;
     }
   }
@@ -282,27 +292,32 @@ void loop() {
     #endif
   }
   
-  // Sensor Routine
-  sensorValue = analogRead(sensorpin);
+  // Sensor and RTC Routine (10Hz)
+  static unsigned long lastSensorRead = 0;
+  if (millis() - lastSensorRead >= 100) {
+    lastSensorRead = millis();
+    sensorValue = analogRead(sensorpin);
+    
+    if (!Rtc.IsDateTimeValid()) {
+          if (!wasError("loop IsDateTimeValid")) {
+              Serial.println("RTC lost confidence in the DateTime!");
+          }
+    }
+
+    RtcDateTime now = Rtc.GetDateTime();
+    if (!wasError("loop GetDateTime")) {
+        printDateTime(now);
+        Serial.println();
+    }
+  }
   
-  // RTC Routine
-  if (!Rtc.IsDateTimeValid()) {
-        if (!wasError("loop IsDateTimeValid")) {
-            Serial.println("RTC lost confidence in the DateTime!");
-        }
-  }
-
-  RtcDateTime now = Rtc.GetDateTime();
-  if (!wasError("loop GetDateTime")) {
-      printDateTime(now);
-      Serial.println();
-  }
-
-  delay(100); 
+  processDirectionControl();
 }
 
 // Function to run pre-programmed motor sequence
-void directionControl() {
+void startDirectionControl() {
+  currentTestState = TEST_RETRACT;
+  testStartTime = millis();
   analogWrite(ENA, 150); 
   analogWrite(ENB, 150); 
 
@@ -312,22 +327,24 @@ void directionControl() {
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
-  delay(60000); 
+}
+
+void processDirectionControl() {
+  if (currentTestState == TEST_IDLE) return;
   
-  // --- EXTEND PHASE ---
-  Serial.println(F("Testing: Extending BOTH actuators (60s)..."));
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, HIGH);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
-  delay(60000); 
-  
-  // --- STOP ---
-  Serial.println(F("Test Complete: Stopping motors."));
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
+  unsigned long now = millis();
+  if (currentTestState == TEST_RETRACT && (now - testStartTime >= 60000)) {
+    currentTestState = TEST_EXTEND;
+    testStartTime = now;
+    Serial.println(F("Testing: Extending BOTH actuators (60s)..."));
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (currentTestState == TEST_EXTEND && (now - testStartTime >= 60000)) {
+    currentTestState = TEST_IDLE;
+    Serial.println(F("Test Complete: Stopping motors."));
+    digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+  }
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))

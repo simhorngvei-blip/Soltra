@@ -1,8 +1,10 @@
-﻿#include "esp_camera.h"
+#include "esp_camera.h"
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <esp_sleep.h>
+#include <WiFiManager.h>
+#include <ArduinoOTA.h>
 #include "SensorModule.h" // Your custom isolated tab
 
 // ==========================================
@@ -28,8 +30,6 @@
 // ==========================================
 // ⚠️ NETWORK SETTINGS ⚠️
 // ==========================================
-const char* ssid = "OnePlus";         
-const char* password = "pxcf5344";
 uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; 
 
 typedef struct { 
@@ -150,13 +150,17 @@ void setup() {
   // ⚡ ENABLING MODEM SLEEP
   WiFi.mode(WIFI_STA);
   esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
-  WiFi.begin(ssid, password);
   
-  while (WiFi.status() != WL_CONNECTED) { 
-    delay(500); 
-    Serial.print(".");
+  WiFiManager wm;
+  if (!wm.autoConnect("Soltra-Camera-Setup")) {
+    Serial.println("[CAMERA] WiFiManager: failed. Restart.");
+    ESP.restart();
   }
+  
   Serial.println();
+  
+  ArduinoOTA.setHostname("Soltra-Camera-Node");
+  ArduinoOTA.begin();
   
   startCameraServer();
   Serial.print("[SERVER] Ready! Camera is ASLEEP until requested.\n");
@@ -179,6 +183,6 @@ void setup() {
 }
 
 void loop() { 
-  // ⚡ DELETING LOOP TASK frees up Core 0 completely
-  vTaskDelete(NULL); 
+  ArduinoOTA.handle();
+  vTaskDelay(pdMS_TO_TICKS(10)); 
 }

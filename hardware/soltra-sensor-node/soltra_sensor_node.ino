@@ -1,4 +1,4 @@
-﻿#include <WiFi.h>
+#include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h> 
 #include <Wire.h>
@@ -72,9 +72,7 @@ void setup() {
   }
   
   txData.node_id = NODE_ID; 
-}
 
-void loop() {
   int raw_bat = analogRead(BAT_PIN);
   float battery_v = (raw_bat / 4095.0) * 3.1 * 2.0; 
   int ldr_raw = 4095 - analogRead(LDR_PIN);
@@ -101,5 +99,12 @@ void loop() {
   esp_now_send(HUB_MAC, (uint8_t *) &txData, sizeof(txData));
   
   digitalWrite(LED_PIN, LOW); delay(50); digitalWrite(LED_PIN, HIGH);
-  delay(1950); 
+  
+  Serial.println("[SLEEP] Entering Deep Sleep for 2 seconds...");
+  esp_sleep_enable_timer_wakeup(2000000ULL);
+  esp_deep_sleep_start();
+}
+
+void loop() {
+  // Empty, deep sleep triggers reset instead
 }
