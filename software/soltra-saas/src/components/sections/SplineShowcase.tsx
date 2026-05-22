@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import dynamic from 'next/dynamic';
 import { Card } from "@/components/ui/card"
@@ -44,7 +44,7 @@ export function SplineShowcase() {
 
             {/* Right content */}
             <div className="flex-1 relative min-h-[400px]">
-              <VRMScene url="/Girl_alt.vrm" animUrl="/idle.glb" />
+              <VRMScene url="/Girl_alt.vrm" />
             </div>
           </div>
         </Card>

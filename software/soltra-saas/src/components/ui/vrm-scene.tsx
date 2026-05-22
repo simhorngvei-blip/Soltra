@@ -22,14 +22,11 @@ function SimpleLoader() {
   )
 }
 
-function Model({ url, animUrl }: { url: string; animUrl: string }) {
-  const mixerRef = useRef<THREE.AnimationMixer | null>(null)
-  
-  // Load VRM and Animation using separate loader instances to prevent plugin collisions
+function Model({ url }: { url: string }) {
+  // Load VRM
   const gltf = useLoader(VRMCustomLoader, url, (loader) => {
     loader.register((parser) => new VRMLoaderPlugin(parser))
   })
-  const animGltf = useLoader(GLTFLoader, animUrl)
 
   const vrm = useMemo(() => {
     const vrmData = gltf.userData.vrm as VRM
@@ -90,69 +87,8 @@ function Model({ url, animUrl }: { url: string; animUrl: string }) {
     return null
   }, [gltf])
 
-  // Separate effect for animation setup to avoid useMemo side-effects
-  useEffect(() => {
-    try {
-      if (!vrm || !animGltf || !animGltf.animations || animGltf.animations.length === 0) return
-
-      const mixer = new THREE.AnimationMixer(vrm.scene)
-      mixerRef.current = mixer
-
-      const clip = animGltf.animations[0].clone()
-      
-      const mapping: Record<string, VRMHumanBoneName> = {
-        'Hips': 'hips',
-        'Spine': 'spine',
-        'Spine1': 'chest',
-        'Spine2': 'upperChest',
-        'Neck': 'neck',
-        'Head': 'head',
-        'LeftShoulder': 'leftShoulder',
-        'LeftArm': 'leftUpperArm',
-        'LeftForeArm': 'leftLowerArm',
-        'LeftHand': 'leftHand',
-        'RightShoulder': 'rightShoulder',
-        'RightArm': 'rightUpperArm',
-        'RightForeArm': 'rightLowerArm',
-        'RightHand': 'rightHand',
-        'LeftUpLeg': 'leftUpperLeg',
-        'LeftLeg': 'leftLowerLeg',
-        'LeftFoot': 'leftFoot',
-        'RightUpLeg': 'rightUpperLeg',
-        'RightLeg': 'rightLowerLeg',
-        'RightFoot': 'rightFoot'
-      }
-
-      clip.tracks.forEach((track) => {
-        const trackName = track.name.replace('mixamorig_', '')
-        const parts = trackName.split('.')
-        const bonePart = parts[0]
-        const property = parts[1]
-        const vrmBoneKey = mapping[bonePart]
-        
-        if (vrmBoneKey) {
-          const node = vrm.humanoid?.getNormalizedBoneNode(vrmBoneKey)
-          if (node) {
-            track.name = `${node.name}.${property}`
-          }
-        }
-      })
-
-      const action = mixer.clipAction(clip)
-      action.play()
-
-      return () => {
-        action.stop()
-        mixerRef.current = null
-      }
-    } catch (err) {
-      console.warn('[SOLTRA] Animation setup failed:', err)
-    }
-  }, [vrm, animGltf])
-
   useFrame((state, delta) => {
     if (vrm) {
-      if (mixerRef.current) mixerRef.current.update(delta)
       vrm.update(delta)
 
       // Head tracking
@@ -176,7 +112,7 @@ function Model({ url, animUrl }: { url: string; animUrl: string }) {
   return vrm ? <primitive object={vrm.scene} position={[0, -1.2, 0]} /> : null
 }
 
-export function VRMScene({ url, animUrl }: { url: string; animUrl: string }) {
+export function VRMScene({ url }: { url: string }) {
   return (
     <div className="w-full h-full min-h-[400px]">
       <Canvas camera={{ position: [0, 0, 2.5], fov: 35 }}>
@@ -185,7 +121,7 @@ export function VRMScene({ url, animUrl }: { url: string; animUrl: string }) {
           <directionalLight position={[5, 5, 5]} intensity={1.5} />
           <pointLight position={[-5, 5, -5]} intensity={1} color="#00ffff" />
           <Stage intensity={0} adjustCamera={false} environment={null}>
-            <Model url={url} animUrl={animUrl} />
+            <Model url={url} />
           </Stage>
         </Suspense>
       </Canvas>
