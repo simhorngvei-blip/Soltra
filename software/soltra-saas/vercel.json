@@ -1,21 +1,5 @@
 {
   "buildCommand": "npm run build",
   "framework": "nextjs",
-  "regions": ["sin1"],
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL":           "@supabase_url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY":      "@supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY":          "@supabase_service_role_key",
-    "HIVEMQ_HOST":                        "@hivemq_host",
-    "HIVEMQ_PORT":                        "@hivemq_port",
-    "HIVEMQ_USER":                        "@hivemq_user",
-    "HIVEMQ_PASS":                        "@hivemq_pass",
-    "STRIPE_SECRET_KEY":                  "@stripe_secret_key",
-    "STRIPE_WEBHOOK_SECRET":              "@stripe_webhook_secret",
-    "STRIPE_PRICE_STANDARD":              "@stripe_price_standard",
-    "STRIPE_PRICE_ADVANCED":              "@stripe_price_advanced",
-    "TELEMETRY_INGEST_KEY":               "@telemetry_ingest_key",
-    "NEXT_PUBLIC_SITE_URL":               "@site_url",
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@stripe_publishable_key"
-  }
+  "regions": ["sin1"]
 }
