@@ -114,7 +114,7 @@ export function VRMScene({ url }: { url: string }) {
           <ambientLight intensity={0.8} />
           <directionalLight position={[5, 5, 5]} intensity={1.5} />
           <pointLight position={[-5, 5, -5]} intensity={1} color="#00ffff" />
-          <Bounds fit observe damping={4} margin={1.0}>
+          <Bounds fit observe margin={1.0}>
             <Model url={url} />
           </Bounds>
           <OrbitControls 
