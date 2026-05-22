@@ -7,6 +7,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRM, VRMLoaderPlugin, VRMUtils, VRMExpressionPresetName, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 
+class VRMCustomLoader extends GLTFLoader {}
+
 function SimpleLoader() {
   return (
     <Html center>
@@ -23,8 +25,8 @@ function SimpleLoader() {
 function Model({ url, animUrl }: { url: string; animUrl: string }) {
   const mixerRef = useRef<THREE.AnimationMixer | null>(null)
   
-  // Load VRM and Animation
-  const gltf = useLoader(GLTFLoader, url, (loader) => {
+  // Load VRM and Animation using separate loader instances to prevent plugin collisions
+  const gltf = useLoader(VRMCustomLoader, url, (loader) => {
     loader.register((parser) => new VRMLoaderPlugin(parser))
   })
   const animGltf = useLoader(GLTFLoader, animUrl)
