@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PROJECT SOLTRA — Hardware Simulator v2
  * Mimics a Heltec V3 Hub:
  *   1. Publishes telemetry to helios/telemetry every 5s
@@ -65,7 +65,7 @@ client.on('connect', () => {
       solar_yield: parseFloat(solarYield.toFixed(1)),
       panel_angle: parseFloat(panelAngle.toFixed(1)),
       wind_alert:  windAlert,
-      light_level: Math.floor(Math.random() * 100),
+      irradiance:  Math.floor(Math.random() * 500),
       node_online: true,
       status:      currentStatus,
     };

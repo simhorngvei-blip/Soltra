@@ -6,7 +6,9 @@
  * No dependency on the Voicebox desktop app.
  */
 
-const SOLTRA_TTS_URL = 'http://127.0.0.1:8099';
+// Reads from VITE_TTS_URL in .env.local — fallback to localhost for dev.
+// Production: set VITE_TTS_URL to your Cloudflare Tunnel URL.
+const SOLTRA_TTS_URL = import.meta.env.VITE_TTS_URL || 'http://127.0.0.1:8099';
 
 // Cache for the active profile
 let _activeProfileId = null;

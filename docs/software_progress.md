@@ -1,4 +1,4 @@
-﻿# Component Progress: Software
+# Component Progress: Software
 
 ## 1. Network & Connectivity
 **Status:** ✅ Operational
@@ -8,10 +8,11 @@
 
 ## 2. Industrial Operator HUD (`persona`)
 **Status:** ✅ Refactor Complete
-- [x] High-craft React/Three.js Industrial Terminal.
-- [x] CRT Scanline & Monospace aesthetic integration.
-- [x] Network Grid (Socials) infrastructure monitor.
-- [x] Interactive 3D Digital Twin with VRM Avatar.
+- [x] SvelteKit Desktop HUD (Vite).
+- [x] SvelteKit Mobile App (Android via Capacitor).
+- [x] Live HiveMQ Cloud telemetry integration.
+- [x] AI Daily Report generator (Ollama `qwen2.5:0.5b`).
+- [x] Live Camera View from S3 Sense Node.
 
 ## 3. SaaS Backend & Data Pipeline
 **Status:** ✅ Complete

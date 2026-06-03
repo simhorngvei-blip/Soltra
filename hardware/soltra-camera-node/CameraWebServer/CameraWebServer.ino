@@ -1,3 +1,33 @@
+// ═════════════════════════════════════════════
+// SOLTRA HARDWARE CONFIG — CAMERA NODE (Node 4)
+// Edit this block. Scroll down for the firmware.
+// ═════════════════════════════════════════════
+//
+// NOTE: No ENV_LOCAL / ENV_PRODUCTION toggle needed here.
+//       The camera node sends sensor data over ESP-NOW and serves
+//       a local MJPEG stream via HTTP. It never contacts the cloud
+//       directly. The Master Hub relays its sensor data upstream.
+//
+// STEP 1 — HUB MAC ADDRESS
+//   Must match the WiFi MAC of your Heltec Master Hub.
+//   How to find it:
+//     a) Flash the Master Hub, open Serial Monitor at 115200 baud.
+//     b) Look for: [Core0] WiFi OK | MAC=XX:XX:XX:XX:XX:XX | CH=N
+//     c) Copy that MAC, convert XX to 0xXX bytes, paste below.
+//
+//   Example — MAC=F0:9E:9E:77:7B:F4:
+//     {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}
+//
+// STEP 2 — ACCESS THE CAMERA STREAM
+//   After flashing, open Serial Monitor at 115200 baud.
+//   Look for: Stream URL: http://192.168.x.x/stream
+//   Use that URL in soltra-hud/.env.local as VITE_CAMERA_STREAM_URL.
+//   For production, use a Cloudflare Tunnel or local network access.
+//
+// ═════════════════════════════════════════════
+// END CONFIG — do not edit below unless you know what you're doing
+// ═════════════════════════════════════════════
+
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <esp_now.h>
@@ -30,7 +60,8 @@
 // ==========================================
 // ⚠️ NETWORK SETTINGS ⚠️
 // ==========================================
-uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; 
+// ─── HUB MAC (edit STEP 1 in the config panel at the top of this file) ──────
+uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; // ← replace with your hub MAC
 
 typedef struct { 
   int node_id; 

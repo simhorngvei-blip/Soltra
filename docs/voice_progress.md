@@ -1,20 +1,20 @@
 # Component Progress: Voice
 
-## 1. Local AI Backend (Voicebox)
+## 1. Local AI Backend (TTS & LLM)
 **Status:** ✅ Operational
 - [x] Python 3.10 / CUDA 12.1 GPU Acceleration.
-- [x] Chatterbox-TTS / Qwen3-TTS implementation.
-- [x] FastAPI response endpoints for text/expressions.
+- [x] Dual TTS Engine: Kokoro v1.0 (Primary) + Chatterbox Multilingual (Voice Cloning/Fallback).
+- [x] Ollama `qwen2.5:0.5b` integration for AI text generation.
 - [x] `setup_voicebox.ps1` automation for local deployment.
 
-## 2. Interactive Avatar (Operator Interface)
+## 2. Interactive UI (Operator Interface)
 **Status:** ✅ Complete
-- [x] 3D VRM Avatar loader (`VrmAvatar.jsx`).
-- [x] Multi-animation cross-fading (Idle <-> Talking).
-- [x] Auto-blink and Facial expression overrides (Neutral, Happy, Angry, etc.).
+- [x] SvelteKit based Voice Cloning Modal and interface.
+- [x] Live MQTT Telemetry integration into reporting.
+- [x] AI generated Daily Report based on realtime hardware telemetry.
 
 ## 3. System Integration
 **Status:** ✅ Complete
-- [x] `llmService.js` command routing for avatar interaction.
-- [x] Structured response handling `{text, expression}` to drive visual state.
-- [x] Telemetry readouts integration (Avatar speaks current system state).
+- [x] `llmService.ts` fetching context-aware prompts from local Ollama API.
+- [x] `ttsService.ts` handling fallback cloning logic to backend API.
+- [x] Automated report generation available on both Desktop and Android Mobile HUDs.

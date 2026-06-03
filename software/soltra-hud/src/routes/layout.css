@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Rodin Pro";
+  src: url("/fonts/Rodin Pro EB.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Rodin Pro Medium";
+  src: url("/fonts/Rodin Pro DB.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Rodin Pro Bold";
+  src: url("/fonts/Rodin Pro UB.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "NewRodin Pro";
+  src: url("/fonts/NewRodin Pro DB.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Skip Std B";
+  src: url("/fonts/Skip Std B.otf") format("opentype");
+}
+
+@theme {
+  --color-fg: #fff;
+  --color-bg: #015FCC;
+  --color-bg-dark: #031F64;
+  --color-red: #F00;
+  --color-muted: #808080;
+  --color-pink: #FD77D9;
+
+  --color-button-1: #16CFFB;
+  --color-button-2: #7DE6FD;
+  --color-button-3: #77FEFC;
+
+  --color-border: #5D6A88;
+
+  --font-rodin: "Rodin Pro Bold", sans-serif;
+  --font-rodin-bold: "Rodin Pro Bold", sans-serif;
+  --font-new-rodin: "NewRodin Pro", sans-serif;
+  --font-skip: "Skip Std B", sans-serif;
+
+  --text-shadow-under: 0 1px 6px rgba(0,0,0,0.5), 0 -1px 6px rgba(0,0,0,0.5), 1px 0 6px rgba(0,0,0,0.5), -1px 0 6px rgba(0,0,0,0.5);
+  --shadow-under: 0 1px 6px rgba(0,0,0,0.5), 0 -1px 6px rgba(0,0,0,0.5), 1px 0 6px rgba(0,0,0,0.5), -1px 0 6px rgba(0,0,0,0.5);
+  --text-shadow-border:
+    0 2px 0 var(--color-border),
+    0 -2px 0 var(--color-border),
+    2px 0 0 var(--color-border),
+    -2px 0 0 var(--color-border),
+    -2px -2px 0 var(--color-border),
+    2px -2px 0 var(--color-border),
+    2px 2px 0 var(--color-border),
+    -2px 2px 0 var(--color-border),
+    0 1px 6px rgba(0,0,0,0.5), 0 -1px 6px rgba(0,0,0,0.5), 1px 0 6px rgba(0,0,0,0.5), -1px 0 6px rgba(0,0,0,0.5);
+  --shadow-red: 3px -6px 0 var(--color-red);
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-fg font-rodin;
+  }
+}
+
+@utility masked-text {
+  mask: url(#selector-mask);
+  -webkit-mask: url(#selector-mask);
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}

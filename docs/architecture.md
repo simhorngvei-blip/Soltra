@@ -111,10 +111,10 @@ This document serves as the master context and architecture blueprint for the ID
 | Phase 4 | Legacy Soltra HUD Dashboard — VRM avatar, 3D scene, TTS voice | ✅ Complete |
 | Phase 5 | Cloud Infrastructure — HiveMQ Serverless, dual-core MQTT firmware | ✅ Complete |
 | **Phase 6** | **Industrial Terminal UI Refactor (`soltra-hud`)** | **✅ Complete** |
-| Phase 7 | Implement `/telemetry` and `/manual` pages | 🔲 Next |
-| Phase 8 | Replace mock sensor values with real INA219/MPU6050 reads | 🔲 Planned |
-| Phase 9 | Ephemeris + PID full integration | 🔲 Planned |
-| Phase 10 | Computer Vision (S3 Sense CNN) sun centroid tracking | 🔲 Planned |
+| Phase 7 | Implement `/telemetry` and `/manual` pages | ✅ Complete |
+| Phase 8 | Replace mock sensor values with real INA219/MPU6050 reads | ✅ Complete |
+| Phase 9 | Ephemeris & AI Overseer Override integration | ✅ Complete |
+| Phase 10 | Computer Vision (S3 Sense) sun centroid tracking | 🏗️ In Progress |
 
 ---
 

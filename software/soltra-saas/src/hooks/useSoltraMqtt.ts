@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt, { MqttClient } from 'mqtt'
@@ -20,6 +20,16 @@ interface UseSoltraMqttReturn {
   publish: (topic: string, payload: string) => void
 }
 
+// ⚠️  SECURITY: NEXT_PUBLIC_* env vars are visible in browser devtools and
+// in the compiled JavaScript bundle delivered to every user's browser.
+// These MQTT credentials WILL be exposed to anyone who opens devtools.
+//
+// This hook is intentionally kept for DEVELOPER / ADMIN views only.
+// For homeowner-facing dashboards, use useTelemetryRealtime (Supabase Realtime)
+// which is fully authenticated via the user's session token.
+//
+// The /api/command route already handles MQTT publishing server-side
+// using the non-public HIVEMQ_* env vars, so command publishing is safe.
 const HIVEMQ_HOST = process.env.NEXT_PUBLIC_HIVEMQ_HOST!
 const HIVEMQ_PORT = process.env.NEXT_PUBLIC_HIVEMQ_PORT ?? '8884'
 const HIVEMQ_USER = process.env.NEXT_PUBLIC_HIVEMQ_USER!

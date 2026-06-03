@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signOutAction } from '@/app/actions/auth'
 import type { SoltraUser } from '@/lib/types'
@@ -29,6 +29,8 @@ export default async function DashboardLayout({
 
   const p = profile as SoltraUser | null
   const isFleetAdmin = p?.role === 'fleet_admin'
+  const hudUrl = process.env.NEXT_PUBLIC_HUD_URL || 'http://localhost:5173'
+  const overseerUrl = process.env.NEXT_PUBLIC_OVERSEER_URL || 'http://localhost:5174'
 
   return (
     <div className="min-h-screen bg-zinc-950 flex">
@@ -61,6 +63,23 @@ export default async function DashboardLayout({
               <span>⚡</span> Fleet Command
             </a>
           )}
+          <a
+            href={overseerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400 hover:border-emerald-950 transition-colors"
+          >
+            <span>🤖</span> AI Overseer
+          </a>
+          <a
+            href={hudUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400 hover:border-red-950 transition-colors"
+          >
+            <span>🔺</span> System HUD
+          </a>
+          <div className="h-px bg-zinc-800/50 my-2" />
           <a
             href="/dashboard/onboarding"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 transition-colors text-xs"

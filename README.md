@@ -23,11 +23,12 @@ soltra/
 │   └── soltra-camera-node/      # XIAO ESP32-S3 Sense — CV camera node
 │
 ├── software/                    # Application software
-│   ├── soltra-hud/              # React (Vite) — AI Overseer HUD
+│   ├── soltra-hud/              # SvelteKit (Vite) — AI Overseer Desktop HUD
+│   ├── soltra-hud-mobile/       # SvelteKit + Capacitor — Android Mobile HUD
 │   ├── soltra-saas/             # Next.js — Commercial SaaS platform
 │   ├── soltra-dashboard/        # React (Vite) — Standalone MQTT dashboard
-│   └── soltra-tts/              # Python — Local Voicebox TTS/LLM backend
-│
+│   └── soltra-tts/              # Python — Kokoro/Chatterbox TTS backend & Ollama AI
+
 ├── docs/                        # Documentation & progress tracking
 │   ├── architecture.md          # Master system architecture blueprint
 │   ├── roadmap.md               # Sprint status & engineering roadmap
@@ -36,11 +37,11 @@ soltra/
 │   ├── software_progress.md
 │   ├── voice_progress.md
 │   └── website_progress.md
-│
+
 ├── tools/                       # Setup scripts & utilities
 │   ├── setup_voicebox.ps1       # Voicebox environment bootstrap (Windows)
 │   └── run_voicebox_setup.ps1   # Voicebox runner script
-│
+
 └── experiments/                 # Side projects & research spikes
     ├── persona-quickshell/      # QML Quickshell desktop UI experiments
     ├── p3r-pause-menu/          # SvelteKit UI experiment
@@ -65,10 +66,12 @@ soltra/
 
 | Project | Tech | Purpose |
 |---|---|---|
-| `soltra-hud` | React, Vite, Three.js, Framer Motion | AI Overseer operator interface |
+| `soltra-hud` | SvelteKit, Vite | AI Overseer desktop operator interface |
+| `soltra-hud-mobile` | SvelteKit, Capacitor | AI Overseer mobile application (Android) |
 | `soltra-saas` | Next.js, Tailwind, Supabase, Stripe | Commercial SaaS platform |
 | `soltra-dashboard` | React, Vite, MQTT.js | Live telemetry web dashboard |
-| `soltra-tts` | Python, chatterbox-tts, CUDA | Local voice synthesis backend |
+| `soltra-tts` | Python, Kokoro, Chatterbox | Local dual-engine voice synthesis |
+| `ollama` | Qwen2.5:0.5b | Local LLM for dynamic telemetry reports |
 
 ---
 

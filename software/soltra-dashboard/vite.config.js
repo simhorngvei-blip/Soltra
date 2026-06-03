@@ -8,4 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    port: 5174,   // HUD uses 5173 (SvelteKit default) — dashboard gets 5174
+    strictPort: true,
+  },
 })

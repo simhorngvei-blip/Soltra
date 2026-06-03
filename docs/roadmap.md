@@ -1,6 +1,6 @@
 # Project Soltra: Status Report & Engineering Roadmap
 
-**Status:** Active Sprint - Software Architecture & Hardware Decoupling
+**Status:** Active Sprint - Monetization & Go-to-Market
 
 ---
 
@@ -29,16 +29,16 @@
 
 ---
 
-## Phase 3: The Data Pipeline & Frontend Skeleton (IN PROGRESS)
+## Phase 3: The Data Pipeline & Frontend Skeleton (COMPLETED)
 **Objective:** Scaffold the Next.js application and establish a live, one-way telemetry link from the hardware to the browser.
 
-* **[PENDING] Deliverable 1:** Initialize the Next.js repository using the Antigravity Agent.
-* **[PENDING] Deliverable 2:** Create the Supabase SQL tables based on our defined schema.
-* **[PENDING] Deliverable 3:** Write the `useSoltraMqtt.ts` React hook to catch live JSON telemetry (Watts, Volts, Angles) from the Heltec Hub and display it natively in the browser without page reloads.
+* **[COMPLETED] Deliverable 1:** Initialize the Next.js repository using the Antigravity Agent.
+* **[COMPLETED] Deliverable 2:** Create the Supabase SQL tables based on our defined schema.
+* **[COMPLETED] Deliverable 3:** Write the `useSoltraMqtt.ts` React hook to catch live JSON telemetry (Watts, Volts, Angles) from the Heltec Hub and display it natively in the browser without page reloads.
 
 ---
 
-## Phase 4: Security & Access Control (UPCOMING SPRINT)
+## Phase 4: Security & Access Control (COMPLETED)
 **Objective:** Lock down the data perimeter so users can only view and control the hardware assigned to them.
 
 * **Task 1: Supabase Authentication:** Implement the login/registration portal using `@supabase/ssr`.
@@ -47,7 +47,7 @@
 
 ---
 
-## Phase 5: Bidirectional Command—The Web Joystick (UPCOMING SPRINT)
+## Phase 5: Bidirectional Command—The Web Joystick (COMPLETED)
 **Objective:** Transform the website from a passive monitor into an active remote control.
 
 * **Task 1: Frontend UI:** Build the digital D-Pad and E-Stop buttons using shadcn/ui.
@@ -56,10 +56,20 @@
 
 ---
 
-## Phase 6: Monetization & Go-to-Market (FINAL SPRINT)
+## Phase 6: Monetization & Go-to-Market (IN PROGRESS)
 **Objective:** Integrate the billing engine and polish the user experience for commercial deployment.
 
 * **Task 1: Stripe Integration:** Build the pricing tiers (Free, Pro, Enterprise SLA) and wire up the Stripe Checkout APIs.
 * **Task 2: Webhook Automation:** Create the Next.js API route to catch Stripe payment confirmations and automatically update the user's Supabase `subscription_tier`.
 * **Task 3: UX Polish (B2C):** Implement Recharts to visualize historical power generation and convert Wattage into gamified metrics (Money Saved, CO2 Offset).
 * **Task 4: UX Polish (B2B):** Finalize the Google Maps API integration for the Fleet Manager satellite overwatch.
+
+---
+
+## Phase 7: AI Integrations & Mobile Deployment (COMPLETED)
+**Objective:** Deliver an offline-first AI processing backend for dynamic telemetric reporting and port the operator HUD to Android natively.
+
+* **Task 1: Mobile HUD Porting:** Wrap the SvelteKit operator UI in Capacitor for native Android deployment (`soltra-hud-mobile`).
+* **Task 2: AI Voice Architecture:** Develop a local Python microservice (`soltra-tts`) utilizing Kokoro ONNX for high-speed primary TTS and Chatterbox Multilingual for voice cloning.
+* **Task 3: Dynamic LLM Reporting:** Wire up local Ollama (`qwen2.5:0.5b`) inside the HUDs to instantly generate Daily Reports from Live MQTT sensor values.
+* **Task 4: S3 Sense Integration:** Embed the direct Wi-Fi camera stream from the Seeed Studio XIAO ESP32-S3 Sense node directly into the operator interfaces.

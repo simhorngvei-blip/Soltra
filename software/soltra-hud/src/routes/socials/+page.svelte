@@ -1,0 +1,700 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { initMqtt, mqttStatus } from "$lib/mqttStore";
+
+  let host = $state('XXXXXXXX.s1.eu.hivemq.cloud');
+  let user = $state('helios_hub');
+  let pass = $state('your_password_here');
+
+  function handleConnect() {
+    initMqtt({ host, user, pass });
+  }
+
+  const CHARS = ["/persona_assets/char1.png", "/persona_assets/char2.png"];
+
+  const ROLES = [
+    { text: "NET", color: "#e8c100", bg: "rgba(232,193,0,0.12)", border: "rgba(232,193,0,0.5)" },
+    { text: "STAT",  color: "#4a8fff", bg: "rgba(74,143,255,0.12)", border: "rgba(74,143,255,0.5)" },
+  ];
+
+  const ITEMS = [
+    {
+      id: "broker", label: "BROKER CONFIG", icon: "🌐",
+      stats: [
+        { tag: "WSS", value: "TLS", color: "#00f2ea" },
+        { tag: "PRT", value: "8884",  color: "#ff0050" },
+      ],
+    },
+    {
+      id: "status", label: "LINK STATUS", icon: "📡",
+      stats: [
+        { tag: "QOS", value: "1", color: "#e1306c" },
+        { tag: "NET", value: "UP",  color: "#f77737" },
+      ],
+    },
+  ];
+
+  let active = $state(0);
+  let mounted = $state(false);
+
+  onMount(() => {
+    const t = setTimeout(() => mounted = true, 60);
+    return () => clearTimeout(t);
+  });
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.target instanceof HTMLInputElement) {
+      if (e.key === "Escape") e.target.blur();
+      return;
+    }
+    if (e.key === "ArrowUp")    active = Math.max(0, active - 1);
+    if (e.key === "ArrowDown")  active = Math.min(ITEMS.length - 1, active + 1);
+    if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") goto('/');
+  }
+</script>
+
+<svelte:window onkeydown={handleKeyDown} />
+
+<div id="menu-screen">
+  <!-- svelte-ignore a11y_media_has_caption -->
+  <video src="/persona_assets/main3.mp4" autoplay loop muted playsinline></video>
+  
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div class="sc-root" role="navigation">
+    {#each ITEMS as item, i}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="sc-bar-outer {active === i ? 'active' : ''} {mounted ? 'mounted' : ''}"
+        onclick={() => { active = i; }}
+        onmouseenter={() => active = i}
+      >
+        <div class="sc-bar-red"></div>
+        <div class="sc-bar">
+          <img class="sc-char" src={CHARS[i]} alt="" />
+          <div class="sc-bar-fill"></div>
+          <div class="sc-bar-shade"></div>
+          <div class="sc-bar-content">
+            <div class="sc-role">{ROLES[i].text}</div>
+            <div class="sc-main">
+              <div class="sc-main-top">
+                <div class="sc-icon">{item.icon}</div>
+                <div class="sc-label">{item.label}</div>
+              </div>
+            </div>
+            <div class="sc-stats">
+              {#each item.stats as s}
+                <div class="sc-stat">
+                  <div class="sc-stat-top">
+                    <span class="sc-stat-tag" style="color: {s.color}; border-color: {s.color};">{s.tag}</span>
+                    <span class="sc-stat-num">{s.value}</span>
+                  </div>
+                  <div class="sc-stat-bars">
+                    <div class="sc-stat-bar-color" style="background: {s.color};"></div>
+                    <div class="sc-stat-bar-black"></div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+      </div>
+    {/each}
+  </div>
+
+  {#if mounted}
+    <div class="sc-right-nav">
+      <span class="sc-nav-arrow left">◄</span>
+      <span class="sc-nav-btn">LB</span>
+      <span class="sc-nav-label">{ITEMS[active].label}</span>
+      <span class="sc-nav-btn">RB</span>
+      <span class="sc-nav-arrow right">►</span>
+    </div>
+  {/if}
+
+  {#if mounted}
+    <div class="sc-info-panel" style="pointer-events: all; padding: 24px; background: rgba(0,0,0,0.8); border: 1px solid rgba(196,0,26,0.3); border-radius: 8px;">
+      {#if active === 0}
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 38px; color: #fff; margin-bottom: 4px; letter-spacing: 2px;">BROKER CONFIGURATION</h2>
+          
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: #aaa; letter-spacing: 1px;">WSS HOST</label>
+            <input bind:value={host} type="text" style="background: rgba(255,255,255,0.05); border: 1px solid #c4001a; color: #fff; padding: 14px; font-family: monospace; font-size: 18px; outline: none;" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: #aaa; letter-spacing: 1px;">USERNAME</label>
+              <input bind:value={user} type="text" style="background: rgba(255,255,255,0.05); border: 1px solid #c4001a; color: #fff; padding: 14px; font-family: monospace; font-size: 18px; outline: none;" />
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: #aaa; letter-spacing: 1px;">PASSWORD</label>
+              <input bind:value={pass} type="password" style="background: rgba(255,255,255,0.05); border: 1px solid #c4001a; color: #fff; padding: 14px; font-family: monospace; font-size: 18px; outline: none;" />
+            </div>
+          </div>
+
+          <button onclick={handleConnect} style="margin-top: 12px; background: #c4001a; color: #fff; border: none; padding: 18px; font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 2px; cursor: pointer; transition: background 0.2s;" onmouseover={(e) => e.currentTarget.style.background='#ff0022'} onmouseout={(e) => e.currentTarget.style.background='#c4001a'}>
+            [ RECONNECT ]
+          </button>
+        </div>
+      {:else}
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 38px; color: #fff; margin-bottom: 4px; letter-spacing: 2px;">CONNECTION STATUS</h2>
+          <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+             <span style="font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: #aaa; letter-spacing: 1px;">CURRENT STATE</span>
+             <span style="font-family: 'Anton', sans-serif; font-size: 64px; color: {$mqttStatus === 'CONNECTED' ? '#00FF41' : '#FFB000'};">{$mqttStatus}</span>
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <div class="sc-footer {mounted ? 'mounted' : ''}">
+    <div class="sc-footer-row"><span class="sc-footer-key">↑↓</span><span>SELECT</span></div>
+    <div class="sc-footer-row"><span class="sc-footer-key">↵</span><span>OPEN</span></div>
+    <div class="sc-footer-row"><span class="sc-footer-key">ESC</span><span>BACK</span></div>
+  </div>
+
+  <div class="sc-mobile-controls" aria-label="Socials mobile controls">
+    <button class="sc-mobile-btn" type="button" onclick={() => goto('/')}>
+      BACK
+    </button>
+  </div>
+</div>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,400;0,700;1,700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&display=swap');
+
+  #menu-screen {
+    position: absolute;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+  }
+  #menu-screen > video {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  .sc-root {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 6px;
+    padding-left: 0;
+  }
+
+  /* ── Each bar ── */
+  .sc-bar {
+    position: relative;
+    width: 45vw;
+    height: 64px;
+    transition: height 0.3s cubic-bezier(0.22,1,0.36,1);
+    background: #111;
+    cursor: pointer;
+    pointer-events: all;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.65);
+    z-index: 1;
+  }
+
+  /* wrapper holds both the red underlay and the bar */
+  .sc-bar-outer {
+    position: relative;
+    flex-shrink: 0;
+    transform: translateX(-100%);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sc-bar-outer.active .sc-bar     { height: 90px; }
+  .sc-bar-outer.active .sc-bar-red { height: 90px; }
+  .sc-bar-outer.mounted { transform: translateX(0); }
+  .sc-bar-outer:nth-child(1) { transition-delay: 0ms; }
+  .sc-bar-outer:nth-child(2) { transition-delay: 80ms; }
+  .sc-bar-outer:nth-child(3) { transition-delay: 160ms; }
+
+  /* red underlay — peeks out below the bar when active */
+  .sc-bar-red {
+    position: absolute;
+    top: 0; left: 0;
+    width: 45vw;
+    height: 64px;
+    background: #c4001a;
+    clip-path: polygon(50% 0, 100% 0, 100% 100%, calc(50% - 10px) 100%);
+    transform: translateY(-7px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .sc-bar-outer.active .sc-bar-red { opacity: 1; }
+
+  /* white fill — skewed parallelogram on the right 25% */
+  .sc-bar-fill {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #ffffff;
+    clip-path: polygon(100% 0, 100% 0, calc(100% - 32px) 100%, calc(100% - 32px) 100%);
+    transition: clip-path 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 0;
+  }
+  .sc-bar-outer.active .sc-bar-fill {
+    clip-path: polygon(22% 0, 100% 0, calc(100% - 14px) 100%, calc(22% + 138px) 100%);
+  }
+
+  /* shade on the left edge of the white fill */
+  .sc-bar-shade {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 73%;
+    width: 6%;
+    background: linear-gradient(90deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%);
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .sc-bar-outer.active .sc-bar-shade { opacity: 1; }
+
+  /* bottom shadow line under each bar */
+  .sc-bar::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  /* content layout inside each bar */
+  .sc-bar-content {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 0 20px;
+  }
+
+  /* left: role label */
+  .sc-role {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    font-family: 'Anton', sans-serif;
+    font-size: 50px;
+    letter-spacing: -2px;
+    color: #ffffff;
+    transform: rotate(-30deg);
+    user-select: none;
+    line-height: 1;
+    padding: 0 16px 0 8px;
+  }
+
+  /* left: icon + name centered in remaining space */
+  .sc-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+  }
+  .sc-main-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sc-icon {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+    color: rgba(255,255,255,0.15);
+    transition: color 0.2s ease;
+    user-select: none;
+  }
+  .sc-bar-outer.active .sc-icon { color: rgba(255,255,255,0.25); }
+
+  .sc-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    line-height: 1;
+    color: rgba(255,255,255,0.85);
+    transition: color 0.2s ease;
+    user-select: none;
+  }
+  .sc-bar-outer.active .sc-label { color: #111111; }
+
+  /* lb/rb nav row */
+  @keyframes sc-arrow-left {
+    0%, 100% { transform: translateX(0); opacity: 1; }
+    50%       { transform: translateX(-5px); opacity: 0.4; }
+  }
+  @keyframes sc-arrow-right {
+    0%, 100% { transform: translateX(0); opacity: 1; }
+    50%       { transform: translateX(5px); opacity: 0.4; }
+  }
+  .sc-nav-btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #111;
+    border: 1px solid rgba(0,0,0,0.35);
+    padding: 1px 7px;
+    line-height: 1.5;
+    user-select: none;
+  }
+  .sc-nav-arrow {
+    font-size: 12px;
+    color: #c4001a;
+    display: inline-block;
+  }
+  .sc-nav-arrow.left  { animation: sc-arrow-left  0.8s ease-in-out infinite; }
+  .sc-nav-arrow.right { animation: sc-arrow-right 0.8s ease-in-out infinite; }
+
+  /* right: stats group */
+  .sc-stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 24px;
+    flex-shrink: 0;
+  }
+
+  .sc-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sc-stat-top {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .sc-stat-tag {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    padding: 1px 4px;
+    border-width: 1px;
+    border-style: solid;
+    line-height: 1.4;
+    user-select: none;
+  }
+
+  .sc-stat-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    font-style: italic;
+    line-height: 1;
+    color: #ffffff;
+    letter-spacing: 1px;
+    user-select: none;
+    transition: color 0.2s ease;
+  }
+  .sc-bar-outer.active .sc-stat-num { color: #111111; }
+
+  .sc-stat-bars {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-top: 2px;
+  }
+  .sc-stat-bar-color {
+    height: 3px;
+    width: 100%;
+  }
+  .sc-stat-bar-black {
+    height: 2px;
+    width: 100%;
+    background: #000;
+  }
+
+  /* character portrait */
+  .sc-char {
+    position: absolute;
+    top: 0;
+    left: 110px;
+    height: 100%;
+    width: auto;
+    max-width: 160px;
+    object-fit: cover;
+    object-position: top;
+    pointer-events: none;
+    z-index: 3;
+    clip-path: polygon(20px 0%, 100% 0%, calc(100% - 20px) 100%, 0% 100%);
+  }
+
+  /* right-side nav bar */
+  @keyframes sc-right-nav-pop {
+    0%   { opacity: 0; transform: scale(0.55) translateY(-10px); }
+    65%  { opacity: 1; transform: scale(1.1) translateY(2px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .sc-right-nav {
+    position: fixed;
+    top: 40px;
+    right: 40px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    z-index: 50;
+    animation: sc-right-nav-pop 0.38s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .sc-right-nav .sc-nav-btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 100px;
+    letter-spacing: 3px;
+    line-height: 1;
+    user-select: none;
+    color: #fff;
+    -webkit-text-stroke: 2px #000;
+    paint-order: stroke fill;
+    background: none;
+    border: none;
+    padding: 0 6px;
+  }
+  .sc-right-nav .sc-nav-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 3px;
+    line-height: 1;
+    user-select: none;
+    color: #111;
+    padding: 0 8px;
+  }
+  .sc-right-nav .sc-nav-arrow {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: #c4001a;
+    display: inline-block;
+    user-select: none;
+  }
+  .sc-right-nav .sc-nav-arrow.left  { animation: sc-arrow-left  0.8s ease-in-out infinite; }
+  .sc-right-nav .sc-nav-arrow.right { animation: sc-arrow-right 0.8s ease-in-out infinite; }
+
+  /* info panel */
+  .sc-info-panel {
+    position: fixed;
+    top: 132px;
+    right: 0;
+    left: 65%;
+    bottom: 84px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 8px 8px 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    pointer-events: none;
+  }
+
+  @keyframes sc-infobar-in {
+    0%   { opacity: 0; transform: translateX(40px); }
+    60%  { opacity: 1; transform: translateX(-4px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  .sc-info-bar-wrap {
+    position: relative;
+    right: auto;
+    left: auto;
+    width: 100%;
+    height: 46px;
+    background: transparent;
+    pointer-events: all;
+    cursor: pointer;
+    z-index: 1;
+    padding: 0;
+    animation: sc-infobar-in 0.35s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .sc-info-bar-wrap.selected {
+    background: #111;
+    padding: 1.5px;
+    border-radius: 8px;
+  }
+  .sc-info-bar {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+  .sc-info-bar-wrap.selected .sc-info-bar {
+    background: #fff;
+    border-radius: 7px;
+  }
+  .sc-info-bar-new {
+    position: absolute;
+    left: -40px;
+    bottom: 0;
+    height: 65%;
+    width: auto;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .sc-info-bar-wrap.selected .sc-info-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: #c4001a;
+    z-index: 1;
+  }
+  .sc-info-bar-text {
+    flex: 1;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: #111;
+    padding: 0 14px;
+    user-select: none;
+  }
+  .sc-info-bar-box {
+    height: 70%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: #fff;
+    flex-shrink: 0;
+    border-radius: 6px;
+    margin-right: 4px;
+    user-select: none;
+  }
+
+  .sc-info-bar-icon {
+    height: 55%;
+    width: auto;
+    flex-shrink: 0;
+    margin-left: 14px;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .sc-info-bar-count {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: #111;
+    margin-right: 80px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  /* footer hints */
+  .sc-footer {
+    position: fixed;
+    bottom: 20px; right: 28px;
+    display: flex; flex-direction: column;
+    align-items: flex-end; gap: 5px;
+    font-family: 'Bebas Neue', sans-serif;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.4s ease 0.6s;
+  }
+  .sc-footer.mounted { opacity: 1; }
+  .sc-footer-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; letter-spacing: 2px;
+    color: rgba(255,255,255,0.22);
+  }
+  .sc-footer-key {
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    padding: 1px 6px; font-size: 11px;
+  }
+
+  .sc-mobile-controls {
+    display: none;
+  }
+
+  .sc-mobile-btn {
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1.2px;
+    font-size: 13px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    min-width: 84px;
+  }
+
+  @media (max-width: 768px) {
+    .sc-root {
+      justify-content: flex-start;
+      padding-top: 12px;
+      gap: 3px;
+    }
+
+    .sc-info-panel {
+      top: min(47vh, 320px);
+      left: 8px;
+      right: 8px;
+      bottom: 58px;
+      gap: 4px;
+      padding: 4px 0;
+    }
+
+    .sc-info-bar-wrap {
+      height: 38px !important;
+    }
+
+    .sc-info-bar-text {
+      font-size: 15px;
+      letter-spacing: 1px;
+    }
+
+    .sc-info-bar-count {
+      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    .sc-footer {
+      display: none;
+    }
+
+    .sc-mobile-controls {
+      position: fixed;
+      left: 8px;
+      right: 8px;
+      bottom: max(8px, env(safe-area-inset-bottom));
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      pointer-events: all;
+    }
+  }
+</style>

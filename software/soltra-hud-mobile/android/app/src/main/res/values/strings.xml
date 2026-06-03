@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">soltra-hud</string>
+    <string name="title_activity_main">soltra-hud</string>
+    <string name="package_name">com.soltra.hud</string>
+    <string name="custom_url_scheme">com.soltra.hud</string>
+</resources>
