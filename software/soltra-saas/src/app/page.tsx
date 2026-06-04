@@ -1,4 +1,4 @@
-﻿import { TerminalHero } from '@/components/landing/TerminalHero'
+import { TerminalHero } from '@/components/landing/TerminalHero'
 import { SpecGrid } from '@/components/landing/SpecGrid'
 import { PurchaseCard } from '@/components/landing/PurchaseCard'
 import { SplineShowcase } from '@/components/sections/SplineShowcase'
@@ -13,10 +13,11 @@ export default function Home() {
           <span className="text-3xl font-sans tracking-tighter text-white italic uppercase">SOLTRA</span>
         </div>
         
-        <div className="flex gap-12 text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-500">
+        <div className="flex items-center gap-6 text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-500">
           <a href="#specs" className="hover:text-primary transition-colors">Specifications</a>
           <a href="#purchase" className="hover:text-primary transition-colors">Order</a>
-          <a href="/login" className="text-white hover:text-primary transition-colors border border-white/20 px-4 py-2 hover:bg-white hover:text-black transition-all">Sign In</a>
+          <a href="/login" className="hover:text-primary transition-colors border border-white/20 px-4 py-2 text-zinc-400 hover:border-primary/50 transition-all">Sign In</a>
+          <a href="/login?tab=signup" className="bg-primary text-primary-foreground hover:bg-primary/90 transition-all px-4 py-2 font-sans text-sm tracking-wide">Get Started</a>
         </div>
       </nav>
 
@@ -66,7 +67,7 @@ export default function Home() {
           </div>
         </div>
         <div className="max-w-[1400px] mx-auto mt-24 pt-8 border-t border-zinc-900 flex justify-between items-center text-[10px] font-mono text-zinc-800 uppercase tracking-widest">
-          <span>© 2026 Helios Systems</span>
+          <span>© 2026 SOLTRA Solar</span>
           <span>SOLTRA Protocol v.1.0.0</span>
         </div>
       </footer>

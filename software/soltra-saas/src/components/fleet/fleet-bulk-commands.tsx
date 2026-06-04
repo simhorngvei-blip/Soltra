@@ -126,7 +126,7 @@ export function FleetBulkCommandPanel() {
               log.map((entry, i) => (
                 <div key={i} className="flex items-center gap-2 text-zinc-400">
                   <span className="text-zinc-600">{entry.timestamp.toLocaleTimeString()}</span>
-                  <span className={entry.status === 'ok' ? 'text-red-400' : 'text-red-600'}>
+                  <span className={entry.status === 'ok' ? 'text-emerald-400' : 'text-red-500'}>
                     BULK:{entry.cmd}
                   </span>
                   <span className="text-zinc-500">{entry.label}</span>

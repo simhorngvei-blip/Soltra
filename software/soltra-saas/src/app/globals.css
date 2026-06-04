@@ -47,6 +47,14 @@
     }
   }
   --animate-spotlight: spotlight 2s ease .75s 1 forwards;
+
+  @keyframes odometer-up {
+    0%   { transform: translateY(0);     opacity: 1; }
+    40%  { transform: translateY(-6px);  opacity: 0; }
+    60%  { transform: translateY(6px);   opacity: 0; }
+    100% { transform: translateY(0);     opacity: 1; }
+  }
+  --animate-odometer: odometer-up 0.28s ease-out;
 }
 
 html.lenis {

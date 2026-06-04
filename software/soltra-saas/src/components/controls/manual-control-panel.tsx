@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Square, AlertTriangle } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Square, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 
-
-// ─── Command Protocol (matches Heltec firmware mqttCb) ───────────────────────
+// ─── Command Protocol ─────────────────────────────────────────────────────────
 // 1 = Retract Horizontal    4 = Retract Vertical
 // 2 = Extend Horizontal     5 = Extend Vertical
 // 3 = Stop Horizontal       6 = Stop Vertical
@@ -13,41 +12,32 @@ import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Square, AlertTriangl
 const CONTROL_TOPIC = 'helios/control/manual'
 
 interface CommandLogEntry {
-  cmd: number
-  label: string
+  cmd:       number
+  label:     string
   timestamp: Date
+  status:    'pending' | 'ok' | 'error'
 }
 
 interface ManualControlPanelProps {
-  publish: (topic: string, payload: string) => void
+  publish:     (topic: string, payload: string) => Promise<boolean>
   isConnected: boolean
 }
 
 // ─── Momentary Button ─────────────────────────────────────────────────────────
 function MotorButton({
-  icon: Icon,
-  label,
-  cmd,
-  onCommand,
-  disabled,
-  variant = 'default',
+  icon: Icon, label, cmd, onCommand, disabled, variant = 'default',
 }: {
-  icon: LucideIcon
-  label: string
-  cmd: number
+  icon: LucideIcon; label: string; cmd: number
   onCommand: (cmd: number, label: string) => void
-  disabled: boolean
-  variant?: 'default' | 'stop'
+  disabled: boolean; variant?: 'default' | 'stop'
 }) {
   const [isPressed, setIsPressed] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Momentary press: sends command on mouseDown, stops on mouseUp
   const handlePress = useCallback(() => {
     if (disabled) return
     setIsPressed(true)
     onCommand(cmd, label)
-    // Repeat command every 200ms while held
     intervalRef.current = setInterval(() => onCommand(cmd, label), 200)
   }, [cmd, label, onCommand, disabled])
 
@@ -84,14 +74,25 @@ function MotorButton({
   )
 }
 
-// ─── Main Control Panel ──────────────────────────────────────────────────────
+// ─── Main Control Panel ───────────────────────────────────────────────────────
 export function ManualControlPanel({ publish, isConnected }: ManualControlPanelProps) {
-  const [log, setLog] = useState<CommandLogEntry[]>([])
+  const [log, setLog]       = useState<CommandLogEntry[]>([])
   const [isArmed, setIsArmed] = useState(false)
 
-  const sendCommand = useCallback((cmd: number, label: string) => {
-    publish(CONTROL_TOPIC, String(cmd))
-    setLog(prev => [{ cmd, label, timestamp: new Date() }, ...prev.slice(0, 19)])
+  const sendCommand = useCallback(async (cmd: number, label: string) => {
+    // Optimistically add a pending entry
+    const entry: CommandLogEntry = { cmd, label, timestamp: new Date(), status: 'pending' }
+    setLog(prev => [entry, ...prev.slice(0, 19)])
+
+    const ok = await publish(CONTROL_TOPIC, String(cmd))
+
+    // Update the entry status
+    setLog(prev => {
+      const updated = [...prev]
+      const idx = updated.findIndex(e => e === entry)
+      if (idx !== -1) updated[idx] = { ...updated[idx], status: ok ? 'ok' : 'error' }
+      return updated
+    })
   }, [publish])
 
   const disabled = !isConnected || !isArmed
@@ -105,7 +106,6 @@ export function ManualControlPanel({ publish, isConnected }: ManualControlPanelP
           <span className="text-[10px] font-mono text-zinc-600">→ helios/control/manual</span>
         </div>
 
-        {/* Arm switch */}
         <button
           onClick={() => setIsArmed(!isArmed)}
           className={`
@@ -124,24 +124,20 @@ export function ManualControlPanel({ publish, isConnected }: ManualControlPanelP
       <div className="p-4 flex gap-6">
         {/* D-Pad area */}
         <div className="flex flex-col items-center gap-2">
-          {/* Labels */}
           <div className="flex gap-12 mb-1">
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Horizontal</span>
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Vertical</span>
           </div>
 
           <div className="flex gap-6">
-            {/* Horizontal Axis (Actuator 1) */}
             <div className="flex flex-col items-center gap-2">
               <MotorButton icon={ChevronUp}   label="Retract H" cmd={1} onCommand={sendCommand} disabled={disabled} />
               <MotorButton icon={Square}       label="Stop H"    cmd={3} onCommand={sendCommand} disabled={disabled} variant="stop" />
               <MotorButton icon={ChevronDown}  label="Extend H"  cmd={2} onCommand={sendCommand} disabled={disabled} />
             </div>
 
-            {/* Divider */}
             <div className="w-px bg-zinc-800 self-stretch" />
 
-            {/* Vertical Axis (Actuator 2) */}
             <div className="flex flex-col items-center gap-2">
               <MotorButton icon={ChevronLeft}  label="Retract V" cmd={4} onCommand={sendCommand} disabled={disabled} />
               <MotorButton icon={Square}        label="Stop V"    cmd={6} onCommand={sendCommand} disabled={disabled} variant="stop" />
@@ -149,7 +145,6 @@ export function ManualControlPanel({ publish, isConnected }: ManualControlPanelP
             </div>
           </div>
 
-          {/* Safety notice */}
           {!isArmed && (
             <p className="text-[10px] text-zinc-600 mt-2 font-mono text-center max-w-[220px]">
               ARM the controls to enable manual motor commands
@@ -169,8 +164,24 @@ export function ManualControlPanel({ publish, isConnected }: ManualControlPanelP
               log.map((entry, i) => (
                 <div key={i} className="flex items-center gap-2 text-zinc-400">
                   <span className="text-zinc-600">{entry.timestamp.toLocaleTimeString()}</span>
-                  <span className="text-emerald-400">CMD:{entry.cmd}</span>
+                  {entry.status === 'pending' && (
+                    <span className="text-zinc-500 animate-pulse">···</span>
+                  )}
+                  {entry.status === 'ok' && (
+                    <CheckCircle size={10} className="text-emerald-400 shrink-0" />
+                  )}
+                  {entry.status === 'error' && (
+                    <XCircle size={10} className="text-red-400 shrink-0" />
+                  )}
+                  <span className={
+                    entry.status === 'ok'    ? 'text-emerald-400' :
+                    entry.status === 'error' ? 'text-red-400' :
+                    'text-zinc-400'
+                  }>CMD:{entry.cmd}</span>
                   <span className="text-zinc-500">{entry.label}</span>
+                  {entry.status === 'error' && (
+                    <span className="text-red-500 text-[10px]">[FAILED]</span>
+                  )}
                 </div>
               ))
             )}

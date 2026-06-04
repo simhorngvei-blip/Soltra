@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import type { Node, Site } from '@/lib/types'
@@ -19,7 +19,7 @@ function NoNodeState({ siteName }: { siteName: string }) {
           Site <span className="text-zinc-300">{siteName}</span> has no SOLTRA nodes yet.
         </p>
         <a
-          href="/dashboard/onboarding?step=2"
+          href="/dashboard/onboarding"
           className="inline-block mt-4 rounded-lg border border-emerald-700 bg-emerald-950/50 px-4 py-2 text-xs font-mono text-emerald-400 hover:bg-emerald-900/50 transition-colors"
         >
           Register a Node →

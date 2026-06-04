@@ -10,8 +10,6 @@ interface FleetMapProps {
 }
 
 // ─── Fleet Map ────────────────────────────────────────────────────────────────
-// Uses Leaflet (react-leaflet) to display sites on a real map.
-// Sites without lat/lng are shown in a side-list instead.
 export function FleetMap({ sites, nodes }: FleetMapProps) {
   const mapRef     = useRef<HTMLDivElement>(null)
   const leafletRef = useRef<any>(null)
@@ -22,14 +20,11 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
   useEffect(() => {
     if (!mapRef.current || sitesWithCoords.length === 0) return
 
-    // Dynamically import Leaflet (avoids SSR issues since this is a client component)
     import('leaflet').then((L) => {
-      // Prevent double-initialization
       if (leafletRef.current) {
         leafletRef.current.remove()
       }
 
-      // Fix Leaflet default marker icon path (Webpack asset handling)
       delete (L.Icon.Default.prototype as any)._getIconUrl
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -37,40 +32,65 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
         shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       })
 
-      // Center on first site, or default to world view
       const firstSite = sitesWithCoords[0]
       const map = L.map(mapRef.current!, {
-        center:        [firstSite.lat!, firstSite.lng!],
-        zoom:          12,
-        zoomControl:   true,
+        center:          [firstSite.lat!, firstSite.lng!],
+        zoom:            12,
+        zoomControl:     true,
         scrollWheelZoom: true,
       })
 
       leafletRef.current = map
 
-      // Dark tile layer matching the app's dark theme
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains:  'abcd',
         maxZoom:     20,
       }).addTo(map)
 
-      // Add a marker for each site
       for (const site of sitesWithCoords) {
-        const nodeCount = nodes.filter((n) => n.site_id === site.id).length
-        const active    = nodes.filter((n) => n.site_id === site.id && n.status === 'active').length
+        const nodeCount  = nodes.filter((n) => n.site_id === site.id).length
+        const active     = nodes.filter((n) => n.site_id === site.id && n.status === 'active').length
+        const hasAlert   = nodes.some((n) => n.site_id === site.id && n.status !== 'active' && n.status !== 'offline')
 
-        const marker = L.marker([site.lat!, site.lng!]).addTo(map)
+        // Custom pulsing marker based on status
+        const color  = active > 0 ? '#10b981' : '#52525b'
+        const pulse  = active > 0 ? 'animation: soltra-ping 1.5s cubic-bezier(0,0,0.2,1) infinite;' : ''
+        const ring   = hasAlert   ? 'box-shadow: 0 0 0 4px rgba(239,68,68,0.4);' : ''
+
+        const icon = L.divIcon({
+          html: `
+            <div style="position:relative;width:16px;height:16px;">
+              <div style="
+                position:absolute;inset:0;border-radius:50%;
+                background:${color};opacity:0.3;${pulse}
+              "></div>
+              <div style="
+                position:absolute;inset:3px;border-radius:50%;
+                background:${color};${ring}
+              "></div>
+            </div>
+            <style>
+              @keyframes soltra-ping {
+                75%,100% { transform: scale(2.5); opacity: 0; }
+              }
+            </style>
+          `,
+          className: '',
+          iconSize:  [16, 16],
+          iconAnchor:[8, 8],
+        })
+
+        const marker = L.marker([site.lat!, site.lng!], { icon }).addTo(map)
         marker.bindPopup(`
           <div style="font-family: monospace; font-size: 12px; color: #111;">
             <strong style="font-size: 14px;">${site.name}</strong><br/>
             <span style="color: #555;">${site.timezone}</span><br/>
-            <span style="color: #16a34a;">● ${active} active</span> / ${nodeCount} total nodes
+            <span style="color: #059669;">● ${active} active</span> / ${nodeCount} total
           </div>
         `)
       }
 
-      // Fit map to show all markers if multiple sites
       if (sitesWithCoords.length > 1) {
         const group = L.featureGroup(
           sitesWithCoords.map((s) => L.marker([s.lat!, s.lng!]))
@@ -85,7 +105,7 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
         leafletRef.current = null
       }
     }
-  }, [sitesWithCoords.length])
+  }, [sitesWithCoords.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
@@ -96,21 +116,17 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
       </div>
 
       {sitesWithCoords.length === 0 ? (
-        /* No GPS data available */
         <div className="p-8 text-center">
           <p className="text-sm text-zinc-500 font-mono">
             No GPS coordinates set for any sites.
           </p>
           <p className="text-xs text-zinc-600 mt-1">
-            Edit site coordinates in the Supabase dashboard or add a site edit form.
+            You can add coordinates via your account settings once a site edit form is available.
           </p>
         </div>
       ) : (
         <>
-          {/* Leaflet map container — must have explicit height */}
           <div ref={mapRef} className="h-72 w-full" />
-
-          {/* Import Leaflet CSS via style tag */}
           <style>{`
             .leaflet-container { background: #09090b; }
             .leaflet-popup-content-wrapper { border-radius: 8px; }
@@ -118,7 +134,6 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
         </>
       )}
 
-      {/* Sites without coordinates */}
       {sitesWithoutCoords.length > 0 && (
         <div className="px-4 pb-4 pt-3 border-t border-zinc-800">
           <p className="text-xs font-mono text-zinc-500 mb-2 uppercase tracking-widest">
@@ -140,5 +155,4 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
   )
 }
 
-// Keep the old export name for backward compatibility with fleet/page.tsx
 export { FleetMap as FleetMapPlaceholder }

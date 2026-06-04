@@ -1,10 +1,11 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createSite, createNode } from '@/app/actions/onboarding'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Server, MapPin, ChevronRight, Loader2 } from 'lucide-react'
+import { CheckCircle, Server, MapPin, ChevronRight, Loader2, Info } from 'lucide-react'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TIMEZONES = [
@@ -51,11 +52,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 }
 
 // ─── Field component ──────────────────────────────────────────────────────────
-function Field({
-  label, children,
-}: {
-  label: string; children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-[0.2em] mb-2 block">
@@ -69,26 +66,74 @@ function Field({
 const inputClass =
   'w-full bg-zinc-900 border border-zinc-700 p-3 text-sm font-mono text-zinc-200 placeholder:text-zinc-700 focus:outline-none focus:border-emerald-500/50 transition-all rounded-lg'
 
+// ─── MAC Address Guide ─────────────────────────────────────────────────────────
+function MacAddressGuide() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left"
+      >
+        <Info size={12} className="text-primary shrink-0" />
+        <span>How do I find my MAC address?</span>
+        <ChevronRight
+          size={12}
+          className={`ml-auto transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 space-y-2 text-xs text-zinc-500 font-mono border-t border-zinc-700/50">
+              <p className="pt-2 text-zinc-400 font-sans">Your SOLTRA node's MAC address can be found in 3 ways:</p>
+              <div className="space-y-1.5 mt-1">
+                <div className="flex gap-2">
+                  <span className="text-primary shrink-0">1.</span>
+                  <span><strong className="text-zinc-300">Printed label</strong> — Check the sticker on the underside of your SOLTRA hardware unit. It reads: <code className="text-emerald-400 bg-zinc-900 px-1 rounded">MAC: XX:XX:XX:XX:XX:XX</code></span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-primary shrink-0">2.</span>
+                  <span><strong className="text-zinc-300">Serial monitor</strong> — Connect via USB and open Arduino IDE Serial Monitor (115200 baud). The MAC address is printed on startup.</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-primary shrink-0">3.</span>
+                  <span><strong className="text-zinc-300">WiFi router</strong> — Log into your router and look for a device named <code className="text-emerald-400 bg-zinc-900 px-1 rounded">SOLTRA-NODE</code> in the connected devices list.</span>
+                </div>
+              </div>
+              <p className="text-zinc-600 text-[10px] pt-1">Format: 6 pairs of hex digits separated by colons, e.g. <code className="text-zinc-500">A4:CF:12:3E:89:01</code></p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // ─── Onboarding Wizard ─────────────────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter()
 
-  const [step, setStep]     = useState(1)
+  const [step, setStep]         = useState(1)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
+  const [error, setError]       = useState<string | null>(null)
 
-  // Step 1 fields
   const [siteName, setSiteName]   = useState('')
   const [location, setLocation]   = useState('')
   const [timezone, setTimezone]   = useState('Asia/Kuala_Lumpur')
 
-  // Step 2 fields
   const [mac, setMac]     = useState('')
   const [label, setLabel] = useState('')
 
-  // Created entity IDs (passed between steps)
-  const [siteId, setSiteId]       = useState<string | null>(null)
-  const [createdMac, setCreatedMac] = useState<string>('')
+  const [siteId, setSiteId]             = useState<string | null>(null)
+  const [createdMac, setCreatedMac]     = useState<string>('')
   const [resolvedSiteName, setResolvedSiteName] = useState('')
 
   const handleStep1 = async (e: React.FormEvent) => {
@@ -101,7 +146,7 @@ export default function OnboardingPage() {
       setResolvedSiteName(site.name)
       setStep(2)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create site')
+      setError(err instanceof Error ? err.message : 'Failed to create site. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -110,17 +155,27 @@ export default function OnboardingPage() {
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!siteId) { setError('No site created. Please restart.'); return }
+    if (!siteId) { setError('No site created. Please go back and try again.'); return }
     setIsLoading(true)
     try {
       const node = await createNode({ siteId, mac, label })
       setCreatedMac(node.mac_address)
       setStep(3)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to register node')
+      setError(err instanceof Error ? err.message : 'Failed to register node. Please try again.')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Determine destination based on user role
+  const handleFinish = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: profile } = await supabase
+      .from('users').select('role').eq('id', user.id).single()
+    router.push(profile?.role === 'fleet_admin' ? '/dashboard/fleet' : '/dashboard/homeowner')
   }
 
   const slideVariants = {
@@ -149,7 +204,7 @@ export default function OnboardingPage() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 overflow-hidden">
           <AnimatePresence mode="wait">
 
-            {/* ── Step 1: Site ────────────────────────────────────────────── */}
+            {/* ── Step 1: Site ─────────────────────────────────────────────── */}
             {step === 1 && (
               <motion.form
                 key="step-1"
@@ -200,7 +255,6 @@ export default function OnboardingPage() {
                 </Field>
 
                 {error && <ErrorBlock message={error} />}
-
                 <SubmitButton isLoading={isLoading} label="Continue" />
               </motion.form>
             )}
@@ -236,10 +290,10 @@ export default function OnboardingPage() {
                     title="MAC address format: XX:XX:XX:XX:XX:XX"
                     className={inputClass}
                   />
-                  <p className="text-[10px] text-zinc-600 mt-1.5 font-mono">
-                    Find the MAC address printed on your SOLTRA node or in the firmware serial output.
-                  </p>
                 </Field>
+
+                {/* MAC Address Help Guide */}
+                <MacAddressGuide />
 
                 <Field label="Node Label (optional)">
                   <input
@@ -267,7 +321,7 @@ export default function OnboardingPage() {
               </motion.form>
             )}
 
-            {/* ── Step 3: Success ──────────────────────────────────────────── */}
+            {/* ── Step 3: Success ───────────────────────────────────────────── */}
             {step === 3 && (
               <motion.div
                 key="step-3"
@@ -291,8 +345,8 @@ export default function OnboardingPage() {
                 </motion.div>
 
                 <div>
-                  <h2 className="text-2xl font-bold text-zinc-100">System Online</h2>
-                  <p className="text-sm text-zinc-500 mt-2">Your SOLTRA installation is configured.</p>
+                  <h2 className="text-2xl font-bold text-zinc-100">Node Registered!</h2>
+                  <p className="text-sm text-zinc-500 mt-2">Your SOLTRA installation is configured and ready.</p>
                 </div>
 
                 <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 px-4 py-3 text-left space-y-1">
@@ -306,17 +360,17 @@ export default function OnboardingPage() {
                   </div>
                   <div className="flex justify-between text-xs font-mono">
                     <span className="text-zinc-500">Status</span>
-                    <span className="text-amber-400">Awaiting First Telemetry…</span>
+                    <span className="text-zinc-400">Awaiting first telemetry</span>
                   </div>
                 </div>
 
                 <p className="text-xs text-zinc-600 font-mono">
-                  Power on your SOLTRA node and verify it is connected to the internet.
-                  The dashboard will go live once telemetry packets are received.
+                  Power on your SOLTRA node and ensure it is connected to the internet.
+                  Your dashboard will go live automatically once telemetry packets are received.
                 </p>
 
                 <button
-                  onClick={() => router.push('/dashboard/homeowner')}
+                  onClick={handleFinish}
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white py-3 text-sm font-semibold transition-all active:scale-95"
                 >
                   Launch Dashboard <ChevronRight size={16} />
@@ -335,7 +389,7 @@ export default function OnboardingPage() {
 function ErrorBlock({ message }: { message: string }) {
   return (
     <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-lg text-red-400 text-xs font-mono flex gap-2">
-      <span>[!]</span> {message}
+      <span>⚠</span> {message}
     </div>
   )
 }

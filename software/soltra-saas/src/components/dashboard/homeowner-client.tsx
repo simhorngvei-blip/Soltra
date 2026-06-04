@@ -1,6 +1,6 @@
-﻿'use client'
+'use client'
 
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -8,7 +8,9 @@ import { useTelemetryRealtime } from '@/hooks/useTelemetryRealtime'
 import { ManualControlPanel } from '@/components/controls/manual-control-panel'
 import { TelemetryAreaChart } from '@/components/charts/telemetry-chart'
 import { EnergyProductionChart } from '@/components/charts/energy-chart'
-import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2 } from 'lucide-react'
+import { ToastContainer, useToast } from '@/components/ui/toast'
+import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -22,6 +24,54 @@ interface Props {
 interface EnergyBar {
   label: string
   kwh:   number
+}
+
+// ─── Status labels ────────────────────────────────────────────────────────────
+const STATUS_LABELS: Record<string, string> = {
+  tracking:    'Tracking',
+  stow:        'Stowed',
+  stowed:      'Stowed',
+  idle:        'Idle',
+  active:      'Active',
+  offline:     'Offline',
+  maintenance: 'Maintenance',
+  wind_stow:   'Wind Stow',
+  boot:        'Booting',
+}
+
+function friendlyStatus(raw: string | null | undefined): string {
+  if (!raw) return '—'
+  return STATUS_LABELS[raw.toLowerCase()] ?? raw
+}
+
+// ─── Animated number (odometer effect) ───────────────────────────────────────
+function AnimatedValue({ value }: { value: string | number }) {
+  const [displayed, setDisplayed] = useState(value)
+  const [flash, setFlash]         = useState(false)
+  const prev = useRef(value)
+
+  useEffect(() => {
+    if (prev.current !== value) {
+      setFlash(true)
+      const t = setTimeout(() => {
+        setDisplayed(value)
+        setFlash(false)
+      }, 120)
+      prev.current = value
+      return () => clearTimeout(t)
+    }
+  }, [value])
+
+  return (
+    <motion.span
+      key={String(value)}
+      animate={flash ? { opacity: [1, 0.4, 1], y: [0, -4, 0] } : {}}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className="text-3xl font-bold tabular-nums"
+    >
+      {displayed}
+    </motion.span>
+  )
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -43,7 +93,7 @@ function StatCard({
         <span className="text-xs font-mono uppercase tracking-widest opacity-60">{label}</span>
       </div>
       <div className="flex items-end gap-1">
-        <span className="text-3xl font-bold tabular-nums">{value}</span>
+        <AnimatedValue value={value} />
         <span className="text-sm opacity-60 mb-0.5">{unit}</span>
       </div>
     </div>
@@ -51,14 +101,13 @@ function StatCard({
 }
 
 // ─── HomeownerClient ──────────────────────────────────────────────────────────
-// This client component receives the node ID from the server component (page.tsx)
-// and subscribes to real-time telemetry via Supabase Realtime.
-// MQTT credentials are never used here — commands go through /api/command.
 export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTimezone }: Props) {
-  const { latest, history, isConnected, isLoading } = useTelemetryRealtime(nodeId)
+  const { latest, history, isConnected, isLoading, error } = useTelemetryRealtime(nodeId)
   const [energyData, setEnergyData] = useState<EnergyBar[]>([])
+  const [wasConnected, setWasConnected] = useState(false)
+  const { toasts, toast, dismiss } = useToast()
 
-  // ── Fetch real energy data from Supabase (today's hourly totals) ───────────
+  // ── Fetch real energy data from Supabase ────────────────────────────────────
   useEffect(() => {
     const supabase = createClient()
 
@@ -75,9 +124,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
 
       if (!data || data.length === 0) return
 
-      // Aggregate irradiance readings into hourly kWh estimates
-      // kWh = (avg irradiance W/m² × panel area ~1.8m² × efficiency ~0.18) / 1000 × hours
-      const PANEL_EFFECTIVE_M2 = 1.8 * 0.18   // effective area × efficiency
+      const PANEL_EFFECTIVE_M2 = 1.8 * 0.18
       const hourlyMap: Record<number, { sum: number; count: number }> = {}
 
       for (const row of data) {
@@ -100,8 +147,16 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
     fetchEnergyData()
   }, [nodeId])
 
-  // ── Command publisher — proxied through /api/command (no browser MQTT) ─────
-  const publish = useCallback(async (topic: string, payload: string) => {
+  // ── Detect node going offline ───────────────────────────────────────────────
+  useEffect(() => {
+    if (wasConnected && !isConnected && !isLoading) {
+      toast('Node connection lost. Check that the device is powered on.', 'error')
+    }
+    if (isConnected) setWasConnected(true)
+  }, [isConnected, isLoading, wasConnected]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Command publisher ───────────────────────────────────────────────────────
+  const publish = useCallback(async (topic: string, payload: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/command', {
         method:  'POST',
@@ -109,13 +164,16 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
         body:    JSON.stringify({ nodeId, topic, payload }),
       })
       if (!res.ok) {
-        const { error } = await res.json()
-        console.error('[Command] Failed:', error)
+        const { error: cmdErr } = await res.json().catch(() => ({ error: 'Request failed' }))
+        toast(cmdErr ?? 'Command failed. Check node connectivity.', 'error')
+        return false
       }
-    } catch (err) {
-      console.error('[Command] Network error:', err)
+      return true
+    } catch {
+      toast('Network error. Cannot reach the command server.', 'error')
+      return false
     }
-  }, [nodeId])
+  }, [nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
@@ -125,9 +183,26 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
     )
   }
 
-  const lastUpdateTime = latest
-    ? new Date().toLocaleTimeString()
-    : null
+  // Supabase fetch error
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-10 text-center max-w-md space-y-4">
+          <AlertCircle className="mx-auto text-red-400" size={32} />
+          <h2 className="text-lg font-semibold text-red-400">Unable to load telemetry</h2>
+          <p className="text-sm text-zinc-500 font-mono">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-xs font-mono text-zinc-300 transition-colors"
+          >
+            ↺ Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const lastUpdateTime = latest?.timestamp ?? null
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -140,10 +215,33 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isConnected
-            ? <div className="flex items-center gap-1.5 text-xs text-emerald-400"><Wifi size={12}/> Live</div>
-            : <div className="flex items-center gap-1.5 text-xs text-zinc-500"><WifiOff size={12}/> Waiting for data…</div>
-          }
+          <AnimatePresence mode="wait">
+            {isConnected ? (
+              <motion.div
+                key="connected"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex items-center gap-1.5 text-xs text-emerald-400"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Live
+              </motion.div>
+            ) : (
+              <motion.div
+                key="disconnected"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex items-center gap-1.5 text-xs text-zinc-500"
+              >
+                <WifiOff size={12}/> Waiting for data…
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -163,26 +261,48 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
         />
         <StatCard
           label="Status" icon={Zap} accent="emerald"
-          value={latest?.status ?? '—'} unit=""
+          value={friendlyStatus(latest?.status)} unit=""
         />
       </div>
 
       {/* Wind Alert Banner */}
-      {latest?.wind_alert && (
-        <div className="rounded-xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300 flex items-center gap-2">
-          <Wind size={14} />
-          <strong>Wind Alert Active</strong> — Panel is in emergency stow mode.
-        </div>
-      )}
+      <AnimatePresence>
+        {latest?.wind_alert && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="rounded-xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300 flex items-center gap-2"
+          >
+            <Wind size={14} />
+            <strong>Wind Alert Active</strong> — Panel is in emergency stow mode.
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Node offline banner */}
+      <AnimatePresence>
+        {wasConnected && !isConnected && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-300 flex items-center gap-2"
+          >
+            <WifiOff size={14} />
+            <strong>Node offline</strong> — Connection lost. Ensure the SOLTRA node is powered on and connected to the internet.
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* No data yet banner */}
       {!latest && !isLoading && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-6 text-center">
           <p className="text-sm text-zinc-500 font-mono">
-            No telemetry received yet. Ensure the SOLTRA node is powered on and configured to send data to:
+            No telemetry received yet. Power on your SOLTRA node and ensure it is connected to the internet.
           </p>
-          <p className="text-xs text-emerald-500 font-mono mt-2">
-            POST {process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin}/api/telemetry/ingest
+          <p className="text-xs text-zinc-600 font-mono mt-2">
+            The dashboard will populate automatically once your node begins transmitting.
           </p>
         </div>
       )}
@@ -229,9 +349,12 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
 
       {/* Status Footer */}
       <div className="text-xs text-zinc-600 font-mono">
-        {lastUpdateTime ? `Last update: ${lastUpdateTime}` : 'Awaiting first telemetry packet…'}
+        {lastUpdateTime ? `Last telemetry: ${lastUpdateTime}` : 'Awaiting first telemetry packet…'}
         {' · '}Node: {nodeMac}
       </div>
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   )
 }

@@ -358,11 +358,11 @@ export default function App() {
                 </div>
                 <div className="hud-data-row">
                   <span className="hud-data-label">LATENCY:</span>
-                  <span className="hud-data-value">14ms</span>
+                  <span className="hud-data-value">{telemetry?.latency_ms != null ? `${telemetry.latency_ms}ms` : '—'}</span>
                 </div>
                 <div className="hud-data-row">
-                  <span className="hud-data-label">CORE:</span>
-                  <span className="hud-data-value">V3.5.2</span>
+                  <span className="hud-data-label">UPTIME:</span>
+                  <span className="hud-data-value">{telemetry?.uptime ?? '—'}</span>
                 </div>
               </div>
             </div>
@@ -643,30 +643,36 @@ export default function App() {
                   </button>
                </div>
 
-               {/* Live Camera Image */}
-               <img 
-                 src={import.meta.env.VITE_CAMERA_STREAM_URL || "https://media.giphy.com/media/oEI9uWU0EB9L6/giphy.gif"} 
-                 alt="Camera Stream" 
-                 className="absolute inset-0 w-full h-full object-cover" 
-               />
-
-               {/* Simulated Noise/Static */}
-               <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-overlay">
-                 <div className="w-full h-full bg-[url('https://media.giphy.com/media/oEI9uWU0EB9L6/giphy.gif')] bg-cover" />
-               </div>
-
-               {/* Mock Video Feed Content */}
-               <div className="w-full h-full flex items-center justify-center">
-                 <div className="text-[#ff2a2a] font-mono text-4xl opacity-50 skew-x-12">
-                   ENCRYPTED UPLINK
+               {/* Live Camera Stream */}
+               {import.meta.env.VITE_CAMERA_STREAM_URL ? (
+                 <img 
+                   src={import.meta.env.VITE_CAMERA_STREAM_URL} 
+                   alt="Live camera feed" 
+                   className="absolute inset-0 w-full h-full object-cover" 
+                 />
+               ) : (
+                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 gap-3">
+                   <div className="w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-zinc-600">
+                       <path d="m15 8-8.5 8.5M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>
+                       <path d="M21 3 9 15"/>
+                     </svg>
+                   </div>
+                   <div className="text-center">
+                     <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Camera Offline</p>
+                     <p className="text-zinc-700 font-mono text-[10px] mt-1">VITE_CAMERA_STREAM_URL not configured</p>
+                   </div>
                  </div>
-               </div>
+               )}
 
-               {/* HUD Overlay */}
+               {/* Simulated scanline overlay */}
+               <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)' }} />
+
+               {/* HUD Overlay - live coords when available */}
                <div className="absolute bottom-4 left-4 font-mono text-[10px] text-[#00d9ff] flex flex-col">
-                  <span>LAT: 40.7128° N</span>
-                  <span>LNG: 74.0060° W</span>
-                  <span>ELV: 12.4m</span>
+                  <span>LAT: {telemetry?.lat != null ? `${telemetry.lat.toFixed(4)}° N` : '—'}</span>
+                  <span>LNG: {telemetry?.lng != null ? `${telemetry.lng.toFixed(4)}° W` : '—'}</span>
+                  <span>ELV: {telemetry?.elevation != null ? `${telemetry.elevation}m` : '—'}</span>
                </div>
                <div className="absolute bottom-4 right-4 font-mono text-[10px] text-[#00d9ff] text-right">
                   <span>BITRATE: 4.2 MB/S</span>
