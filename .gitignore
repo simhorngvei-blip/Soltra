@@ -64,3 +64,6 @@ package-lock.json
 
 # --- Private / Sensitive -------------------------------------------------------
 Helios_Final_Report/
+
+# Documentation
+docs/
