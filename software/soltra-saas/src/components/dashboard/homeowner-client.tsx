@@ -265,6 +265,29 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
         />
       </div>
 
+      {/* Camera Stream */}
+      {process.env.NEXT_PUBLIC_CAMERA_STREAM_URL && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+           <div className="px-4 py-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
+             <span className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+               <span className="relative flex h-2 w-2">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+               </span>
+               Live Camera Feed
+             </span>
+           </div>
+           <div className="aspect-video bg-black relative flex items-center justify-center">
+             {/* eslint-disable-next-line @next/next/no-img-element */}
+             <img 
+                src={process.env.NEXT_PUBLIC_CAMERA_STREAM_URL} 
+                alt="Live Camera Feed" 
+                className="w-full h-full object-cover"
+             />
+           </div>
+        </div>
+      )}
+
       {/* Wind Alert Banner */}
       <AnimatePresence>
         {latest?.wind_alert && (
