@@ -1,9 +1,10 @@
-﻿'use client'
+'use client'
 
 import { useRef } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Zap, ArrowRight, ArrowDown } from 'lucide-react'
+import { GlassButton } from '@/components/ui/glass-button'
 
 export function TerminalHero() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -32,7 +33,19 @@ export function TerminalHero() {
 
   return (
     <section ref={containerRef} className="relative min-h-screen flex flex-col justify-center px-12 pt-24 bg-black overflow-hidden">
-      <div className="max-w-[1400px] mx-auto w-full">
+      {/* HUD Background Video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-screen pointer-events-none"
+      >
+        <source src="/videos/Mainn.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black pointer-events-none" />
+
+      <div className="max-w-[1400px] mx-auto w-full relative z-10">
         {/* Top Header Label */}
         <div className="flex justify-between items-end mb-12">
           <div className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-600">
@@ -50,13 +63,13 @@ export function TerminalHero() {
         {/* Huge Impact Title */}
         <h1 className="text-[clamp(4rem,12vw,14rem)] text-impact leading-[0.8] mb-16 tracking-[-0.05em]">
           <div className="overflow-hidden">
-            <span className="hero-word inline-block">AUTONOMOUS</span>
+            <span className="hero-word inline-block">PLANETARY</span>
           </div>
           <div className="overflow-hidden text-primary italic">
-            <span className="hero-word inline-block">SOLAR</span>
+            <span className="hero-word inline-block">ENERGY</span>
           </div>
           <div className="overflow-hidden">
-            <span className="hero-word inline-block">REVOLUTION</span>
+            <span className="hero-word inline-block">INTELLIGENCE</span>
           </div>
         </h1>
 
@@ -64,8 +77,8 @@ export function TerminalHero() {
           {/* Summary / Description */}
           <div className="lg:col-span-5">
             <p className="text-xl md:text-2xl font-mono text-zinc-500 leading-tight uppercase mb-8">
-              Revolutionizing solar energy through precision 
-              edge-computing and distributed telemetry.
+              Orchestrating global energy networks through cognitive 
+              edge-computing and autonomous neural telemetry.
             </p>
             <div className="flex gap-12">
               <div className="hero-stat-item">
@@ -84,15 +97,15 @@ export function TerminalHero() {
             <div className="hero-cta-box bg-primary p-12 flex flex-col justify-between min-h-[300px] industrial-border border-none">
               <div className="flex justify-between items-start">
                 <div className="text-4xl font-sans text-black italic leading-[0.9]">
-                  JOIN THE <br /> FUTURE GRID.
+                  INITIALIZE <br /> THE NETWORK.
                 </div>
                 <Zap size={48} className="text-black" fill="currentColor" />
               </div>
               
               <div className="flex justify-between items-end">
-                <button className="flex items-center gap-4 text-black font-sans text-4xl hover:translate-x-4 transition-transform group italic">
-                  START DEPLOYMENT <ArrowRight size={40} />
-                </button>
+                <GlassButton primary className="text-2xl md:text-4xl italic group border-none">
+                  DEPLOY ARCHITECTURE <ArrowRight size={40} className="group-hover:translate-x-2 transition-transform" />
+                </GlassButton>
                 <div className="text-[10px] font-mono text-black/50 uppercase tracking-widest">
                   Available v.0.9.4
                 </div>

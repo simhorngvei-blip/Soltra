@@ -1,4 +1,6 @@
-﻿'use client'
+'use client'
+
+import { useEffect } from 'react'
 
 export default function Error({
   error,
@@ -7,6 +9,15 @@ export default function Error({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  useEffect(() => {
+    const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+    if (sentryDsn) {
+      console.info(`[Sentry configured] Sending fault data to ${sentryDsn}`);
+      // e.g. Sentry.captureException(error);
+    }
+    console.error('Unhandled fault captured by ErrorBoundary:', error);
+  }, [error]);
+
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-6">
       <div className="text-center max-w-lg">

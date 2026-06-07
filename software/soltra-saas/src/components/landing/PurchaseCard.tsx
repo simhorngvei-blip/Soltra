@@ -1,10 +1,11 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Check, ShieldCheck, Sparkles, Zap, Loader2, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { GlassButton } from '@/components/ui/glass-button'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -12,25 +13,25 @@ gsap.registerPlugin(ScrollTrigger)
 const TIERS = [
   {
     id: 'standard',
-    name: 'Residential',
+    name: 'Developer',
     price: '299',
-    desc: 'Backyard optimization.',
+    desc: 'Prototyping & individual nodes.',
     accent: 'zinc-900',
     text: 'white'
   },
   {
     id: 'advanced',
-    name: 'Professional',
+    name: 'Pro',
     price: '799',
-    desc: 'High-yield deployment.',
+    desc: 'High-yield deployment & advanced telemetry.',
     accent: 'primary',
     text: 'black'
   },
   {
     id: 'enterprise',
-    name: 'Industrial',
+    name: 'Enterprise',
     price: 'CUSTOM',
-    desc: 'Scalable fleet control.',
+    desc: 'Scalable fleet orchestration & custom neural models.',
     accent: 'zinc-100',
     text: 'black'
   }
@@ -97,7 +98,7 @@ export function PurchaseCard() {
             SELECT <br /> <span className="text-primary">YOUR TIER</span>
           </h2>
           <p className="max-w-sm text-zinc-600 font-mono text-sm uppercase tracking-widest leading-relaxed">
-            Deployment units for residential, professional, and industrial grade solar tracking arrays.
+            Licensing tiers for cognitive node intelligence and planetary mesh telemetry.
           </p>
         </div>
 
@@ -124,19 +125,17 @@ export function PurchaseCard() {
                   <span className="text-8xl font-sans italic leading-none tracking-tighter">{tier.price}</span>
                 </div>
 
-                <button 
+                <GlassButton 
                   onClick={() => handlePurchase(tier.id)}
                   disabled={loadingTier !== null}
-                  className={`
-                    group w-full py-6 flex items-center justify-between border-t transition-all hover:bg-black/5
-                    ${tier.text === 'black' ? 'border-black/20 text-black' : 'border-white/20 text-white'}
-                  `}
+                  dark={tier.accent !== 'zinc-900'}
+                  className="w-full mt-8 flex items-center justify-between"
                 >
                   <span className="text-3xl font-sans italic uppercase">
                     {loadingTier === tier.id ? 'PENDING...' : 'DEPLOY'}
                   </span>
                   <ArrowRight className="group-hover:translate-x-2 transition-transform" />
-                </button>
+                </GlassButton>
               </div>
             </div>
           ))}
