@@ -1,139 +1,165 @@
 # Soltra
 
-**Soltra** is a commercial-grade, distributed edge-computing solar tracking ecosystem — combining autonomous embedded hardware, computer vision, cloud telemetry, and an AI-driven operator HUD into a single cohesive platform.
+**🚀 1. Project Overview**
+
+Soltra is a commercial-grade, distributed edge-computing solar tracking ecosystem. It combines autonomous embedded hardware, computer vision, cloud telemetry, and an AI-driven operator interface into a single cohesive platform. 
+
+The system was built to solve the inefficiencies of static solar panels and traditional, dumb solar trackers by introducing a decentralized, AI-driven, and weather-predicting approach. By continuously calculating optimal pan and tilt angles through local sensor fusion (LDR, UV, IR) and astronomical ephemeris, it ensures maximum energy yield.
+
+Designed for both residential (B2C) and agricultural fleet (B2B) markets, Soltra features a zero-collision ESP-NOW radio mesh for inter-device communication, HiveMQ for real-time cloud telemetry, and Supabase for persistent data storage. It bridges the gap between raw hardware and an enterprise SaaS experience.
 
 ---
 
-## System Overview
+**🏗️ 2. System Architecture (The Big Picture)**
 
-> Decentralized. AI-driven. Weather-predicting. Built for real deployments.
+The hardware layer operates autonomously using a fast, local ESP-NOW mesh network. The Master Hub gathers data from the Sensor Nodes and Motor Controller, then publishes telemetry to HiveMQ via WiFi. The Next.js SaaS backend ingests this telemetry via secure HTTP POST requests and stores it in a Supabase PostgreSQL database. Clients (the Vite Dashboard and SaaS UI) subscribe to Supabase Realtime for live updates. For voice commands and notifications, the SaaS acts as a proxy to a local Python FastAPI server running the Kokoro ONNX TTS engine over a permanent Ngrok Tunnel.
 
-Soltra features a zero-collision ESP-NOW radio mesh, HiveMQ cloud telemetry, a voice-interactive AI operator interface, and a full SaaS management platform — designed for both residential (B2C) and agricultural fleet (B2B) markets.
+```mermaid
+graph TB
+    subgraph "☁️ CLOUD"
+        HMQ["HiveMQ Cloud<br/>MQTT Broker<br/>mqtts://8883 | wss://8884"]
+        SB["Supabase<br/>PostgreSQL + Auth + Realtime"]
+        VCL["Vercel<br/>Next.js Hosting"]
+        NGROK["Ngrok Tunnel<br/>Permanent URL"]
+    end
 
----
+    subgraph "⚡ HARDWARE MESH"
+        SN1["Sensor Node 1<br/>XIAO ESP32-C3"]
+        SN2["Sensor Node 2<br/>XIAO ESP32-C3"]
+        SN3["Sensor Node 3<br/>XIAO ESP32-C3"]
+        CAM["Camera Node 4<br/>XIAO ESP32-S3 Sense"]
+        HUB["Master Hub<br/>Heltec WiFi LoRa 32 V3"]
+        MOT["Motor Controller<br/>Wemos D1 R32 + L298N Driver"]
+    end
 
-## Repository Structure
+    subgraph "🖥️ SOFTWARE"
+        SAAS["soltra-saas<br/>Next.js 16 + Tailwind 4"]
+        HUDW["soltra-hud (Desktop)<br/>SvelteKit + Vite"]
+        HUDM["soltra-hud-mobile<br/>SvelteKit + Capacitor"]
+        TTS["soltra-tts<br/>Python + Kokoro ONNX"]
+        CV["soltra-cv<br/>Python + OpenCV"]
+    end
 
+    SN1 -- "ESP-NOW (Polled)" --> HUB
+    SN2 -- "ESP-NOW (Polled)" --> HUB
+    SN3 -- "ESP-NOW (Polled)" --> HUB
+    CAM -- "ESP-NOW (Polled)" --> HUB
+    HUB -- "ESP-NOW" --> MOT
+    MOT -- "ESP-NOW telemetry" --> HUB
+
+    HUB -- "MQTT TLS 8883<br/>helios/telemetry" --> HMQ
+    HUB -- "HTTP POST<br/>/api/telemetry/ingest" --> VCL
+
+    HMQ -- "WSS 8884" --> HUDW
+    HMQ -- "WSS 8884" --> HUDM
+
+    VCL -- "API Routes" --> SAAS
+    SAAS -- "Supabase Client" --> SB
+    SAAS -- "MQTT publish" --> HMQ
+
+    SB -- "Realtime WS" --> SAAS
+    
+    HUDW -- "Avatar + TTS Request" --> NGROK
+    HUDM -- "Avatar + TTS Request" --> NGROK
+    NGROK -- "Route to Localhost" --> TTS
+    
+    CV -. "Video Stream<br/>Standalone (Pending Integration)" .-> CAM
+
+    style CV stroke-dasharray: 5 5,stroke:#ff2a2a
 ```
-soltra/
-├── hardware/                    # Embedded firmware (Arduino/ESP32)
-│   ├── soltra-master-hub/       # Heltec WiFi LoRa 32 — FreeRTOS Hub OS
-│   ├── soltra-motor-controller/ # Wemos D1 R32 — ESP-NOW motor driver
-│   ├── soltra-sensor-node/      # XIAO ESP32-C3 — TinyML sensor corners
-│   └── soltra-camera-node/      # XIAO ESP32-S3 Sense — CV camera node
-│
-├── software/                    # Application software
-│   ├── soltra-hud/              # SvelteKit (Vite) — AI Overseer Desktop HUD
-│   ├── soltra-hud-mobile/       # SvelteKit + Capacitor — Android Mobile HUD
-│   ├── soltra-saas/             # Next.js — Commercial SaaS platform
-│   ├── soltra-dashboard/        # React (Vite) — Standalone MQTT dashboard
-│   └── soltra-tts/              # Python — Kokoro/Chatterbox TTS backend & Ollama AI
-
-├── docs/                        # Documentation & progress tracking
-│   ├── architecture.md          # Master system architecture blueprint
-│   ├── roadmap.md               # Sprint status & engineering roadmap
-│   ├── hivemq_setup.md          # HiveMQ Serverless cluster setup guide
-│   ├── hardware_progress.md
-│   ├── software_progress.md
-│   ├── voice_progress.md
-│   └── website_progress.md
-
-├── tools/                       # Setup scripts & utilities
-│   ├── setup_voicebox.ps1       # Voicebox environment bootstrap (Windows)
-│   └── run_voicebox_setup.ps1   # Voicebox runner script
-
-└── experiments/                 # Side projects & research spikes
-    ├── persona-quickshell/      # QML Quickshell desktop UI experiments
-    ├── p3r-pause-menu/          # SvelteKit UI experiment
-    ├── persona-3-reload-pause-menu/ # Godot UI experiment
-    └── data/                    # Local DB and backend data
-```
 
 ---
 
-## Hardware Stack
+**📂 3. Directory Structure & Module Breakdown**
 
-| Component | Role | MCU |
-|---|---|---|
-| Master Hub | Radio master, cloud gateway, motor control | Heltec WiFi LoRa 32 (V3) |
-| Motor Controller | ESP-NOW receiver, Cytron MDD3A driver | Wemos D1 R32 (ESP32) |
-| Sensor Nodes (×3) | UV/LDR/TinyML corner sensing | Seeed XIAO ESP32-C3 |
-| Camera Node | CV sun centroid tracking | Seeed XIAO ESP32-S3 Sense |
+*   `hardware/soltra-master-hub`: 
+    *   **What it is:** The "brain" of the hardware mesh, running on a Heltec WiFi LoRa 32 V3.
+    *   **What it does:** Calculates sun positions, aggregates telemetry, and acts as the cloud gateway.
+    *   **How it interacts:** Receives ESP-NOW data from sensors, controls the motor, and publishes to HiveMQ and the SaaS via HTTP.
+*   `hardware/soltra-motor-controller`: 
+    *   **What it is:** ESP32 Dev Kit motor driver.
+    *   **What it does:** Drives the reliable L298N dual H-bridge motor driver and reads accelerometer/gyro data via an MPU6050.
+    *   **How it interacts:** Communicates strictly with the Master Hub via ESP-NOW to report physical orientation and receive movement commands.
+*   `hardware/soltra-sensor-node`: 
+    *   **What it is:** Tiny, deep-sleep capable sensor corners running on Seeed XIAO ESP32-C3s.
+    *   **What it does:** Uses LDRs, UV, and IR sensors to report raw light intensity.
+    *   **How it interacts:** Broadcasts data to the Master Hub over the ESP-NOW mesh.
+*   `hardware/soltra-camera-node`: 
+    *   **What it is:** ESP32-CAM module.
+    *   **What it does:** Provides an MJPEG video stream for operator oversight.
+    *   **How it interacts:** Streams video directly over the local network to the Dashboards/HUDs.
+*   `software/soltra-saas`: 
+    *   **What it is:** The primary Next.js 16 commercial SaaS platform.
+    *   **What it does:** Handles Supabase authentication, node registration, and customer-facing UI.
+    *   **How it interacts:** Primary telemetry ingest point (HTTP POST) and proxies client requests to the TTS server.
+*   `software/soltra-dashboard`: 
+    *   **What it is:** A React/Vite standalone companion app.
+    *   **What it does:** Features a Three.js 3D representation of the solar tracker for operators.
+    *   **How it interacts:** Listens to Supabase Realtime for telemetry updates and connects locally to the TTS server.
+*   `software/soltra-tts`: 
+    *   **What it is:** A local Python FastAPI server.
+    *   **What it does:** Handles text-to-speech generation using Kokoro ONNX for fast, 24kHz audio synthesis.
+    *   **How it interacts:** Receives POST requests from the SaaS edge functions or local dashboards and returns WAV audio streams.
+*   `software/soltra-hud` & `soltra-hud-mobile`: 
+    *   **What it is:** SvelteKit applications for on-site technicians.
+    *   **What it does:** Acts as a local-only, direct-MQTT operational HUD.
+    *   **How it interacts:** Connects directly to HiveMQ over WebSockets (WSS).
 
 ---
 
-## Software Stack
+**🔌 4. Hardware Integration**
 
-| Project | Tech | Purpose |
-|---|---|---|
-| `soltra-hud` | SvelteKit, Vite | AI Overseer desktop operator interface |
-| `soltra-hud-mobile` | SvelteKit, Capacitor | AI Overseer mobile application (Android) |
-| `soltra-saas` | Next.js, Tailwind, Supabase, Stripe | Commercial SaaS platform |
-| `soltra-dashboard` | React, Vite, MQTT.js | Live telemetry web dashboard |
-| `soltra-tts` | Python, Kokoro, Chatterbox | Local dual-engine voice synthesis |
-| `ollama` | Qwen2.5:0.5b | Local LLM for dynamic telemetry reports |
+The hardware ecosystem relies heavily on the Espressif ESP32 family for both processing power and wireless capabilities.
+*   **Microcontrollers:** Heltec WiFi LoRa 32 V3 (Master Hub), Wemos D1 R32 (Motor Controller), and Seeed Studio XIAO ESP32-C3s (Sensor Nodes).
+*   **Sensors & Actuators:** MPU6050 for tilt/pan sensing, TSL2591 and generic LDRs for light/UV sensing, and L298N motor drivers for actuation.
+*   **Cloud Connectivity:** The Master Hub connects to a local 2.4GHz WiFi network (configured via a captive portal `WiFiManager`). It communicates directly with HiveMQ Cloud via MQTT (port 8883) and pushes bulk telemetry to the Next.js SaaS via secure HTTPS POST requests (`TELEMETRY_URL`). It maintains internal cohesion by utilizing the low-latency ESP-NOW protocol for offline peer-to-peer messaging.
 
 ---
 
-## Quick Start
+**💻 5. Local Setup & Development Guide**
 
-### Hardware
-Open any `.ino` file in Arduino IDE. Install required libraries (see `docs/architecture.md` for the full sensor list).
+Follow these terminal commands to spin up the entire ecosystem locally:
 
-### soltra-hud
 ```bash
-cd software/soltra-hud
-npm install
-npm run dev
-```
+# 1. Clone the repository and enter the workspace
+git clone <repository-url> soltra
+cd soltra
 
-### soltra-saas
-```bash
+# 2. Setup soltra-saas (Next.js)
 cd software/soltra-saas
 npm install
-cp .env.local.example .env.local  # fill in Supabase & HiveMQ credentials
+cp .env.local.example .env.local 
+# Edit .env.local to include your Supabase & HiveMQ keys
 npm run dev
-```
+# SaaS is now running on http://localhost:3000
 
-### soltra-dashboard
-```bash
+# 3. Setup soltra-dashboard (Vite + React)
+# Open a NEW terminal
 cd software/soltra-dashboard
 npm install
+# Ensure .env.local contains VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_TTS_URL
 npm run dev
+# Dashboard is now running on http://localhost:5174
+
+# 4. Setup soltra-tts (Python FastAPI)
+# Open a NEW terminal
+cd software/soltra-tts
+pip install -r requirements.txt
+# Ensure you have downloaded the kokoro-v1.0.onnx model and voices.json to this folder
+python server.py
+# TTS Server is now running on http://localhost:8099
+
+# Run Ngrok Tunnel to expose the TTS server via a permanent URL
+# Open a NEW terminal
+ngrok http 8099
 ```
 
-### soltra-tts (Voicebox)
-```powershell
-# Windows — run from tools/
-.\tools\setup_voicebox.ps1      # first-time setup
-.\tools\run_voicebox_setup.ps1  # start server
-```
-
 ---
 
-## Cloud Infrastructure
-- **Broker:** HiveMQ Serverless (MQTT over TLS port 8883 / WSS port 8884)
-- **MQTT Topics:** `helios/telemetry`, `helios/control/manual`, `helios/status`
-- **Backend:** Supabase (PostgreSQL + Auth + RLS)
-- **Billing:** Stripe
+**🛠️ 6. Tech Stack & Dependencies**
 
-See [`docs/hivemq_setup.md`](docs/hivemq_setup.md) for full broker configuration.
-
----
-
-## Design Language — Industrial Terminal
-
-| Token | Value |
-|---|---|
-| Background | `#001a24` |
-| Primary Cyan | `#00d9ff` |
-| Alert Red | `#ff2a2a` |
-| Warning Amber | `#ffaa00` |
-| Header Font | `Bebas Neue` |
-| Data Font | `monospace` |
-
----
-
-## License
-
-Private — All rights reserved. © Soltra.
+*   **Frontend & Web Apps:** Next.js 16 (App Router), React 19, Vite, SvelteKit, Tailwind CSS v4, Framer Motion, GSAP, Three.js / React Three Fiber.
+*   **Backend & Database:** Supabase (PostgreSQL, Auth, Realtime), Node.js.
+*   **AI & Services:** Python 3, FastAPI, Kokoro ONNX (TTS), Chatterbox TTS, Ollama (Qwen 2.5:0.5b).
+*   **IoT & Hardware:** C++ / Arduino Framework, ESP-NOW, MQTT.js, HiveMQ Cloud, FreeRTOS.
+*   **Tools:** Vercel (Hosting), Ngrok (Tunneling).
