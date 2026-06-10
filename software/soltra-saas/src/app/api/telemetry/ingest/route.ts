@@ -6,15 +6,21 @@ import { createClient } from '@supabase/supabase-js'
 // Uses the service_role key to bypass RLS (hardware cannot carry user JWTs).
 // Authenticates via a shared TELEMETRY_INGEST_KEY in the Authorization header.
 //
-// Expected body (matches Heltec firmware JSON):
+// Expected body (matches Soltra Master Schema):
 // {
-//   node_mac:    string   — MAC address of the reporting node
-//   wind_speed:  number   — Wind speed in m/s
-//   solar_yield: number   — Solar irradiance in W/m²  (NOT watts output)
-//   panel_angle: number   — Pan axis angle in degrees
-//   tilt_angle:  number   — Tilt axis angle in degrees (optional)
-//   wind_alert:  boolean  — True when wind safety stow is triggered
-//   status:      string   — Node status string ("TRACKING", "STOW", etc.)
+//   node_mac:       string   — MAC address of the reporting node
+//   battery_pct:    number   — Battery level 0-100%
+//   uv_index:       number   — UV Index
+//   lux:            number   — True lux from TSL2591
+//   irradiance_wm2: number   — Estimated W/m²
+//   humidity_pct:   number   — Humidity %
+//   power_watts:    number   — Power output in Watts
+//   panel_volts:    number   — Panel voltage
+//   wind_speed_ms:  number   — Wind speed in m/s
+//   wind_alert:     boolean  — True when wind safety stow is triggered
+//   pan_angle_deg:  number   — Pan axis angle in degrees
+//   tilt_angle_deg: number   — Tilt axis angle in degrees
+//   status:         string   — Node status string
 // }
 
 const INGEST_KEY = process.env.TELEMETRY_INGEST_KEY
@@ -35,20 +41,32 @@ export async function POST(request: NextRequest) {
 
   const {
     node_mac,
-    wind_speed,
-    solar_yield,  // irradiance W/m² from firmware
-    panel_angle,
-    tilt_angle,
+    battery_pct,
+    uv_index,
+    lux,
+    irradiance_wm2,
+    humidity_pct,
+    power_watts,
+    panel_volts,
+    wind_speed_ms,
     wind_alert,
+    pan_angle_deg,
+    tilt_angle_deg,
     status,
   } = body as {
-    node_mac:    string
-    wind_speed?: number
-    solar_yield?: number
-    panel_angle?: number
-    tilt_angle?:  number
-    wind_alert?:  boolean
-    status?:      string
+    node_mac:        string
+    battery_pct?:    number
+    uv_index?:       number
+    lux?:            number
+    irradiance_wm2?: number
+    humidity_pct?:   number
+    power_watts?:    number
+    panel_volts?:    number
+    wind_speed_ms?:  number
+    wind_alert?:     boolean
+    pan_angle_deg?:  number
+    tilt_angle_deg?: number
+    status?:         string
   }
 
   if (!node_mac) {
@@ -81,22 +99,19 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Insert telemetry record ─────────────────────────────────────────────────
-  // Field mapping from firmware names → DB schema names:
-  //   solar_yield → irradiance  (W/m², NOT watts power output)
-  //   panel_angle → pan_angle
-  //   tilt_angle  → tilt_angle
-  //   wind_speed  → wind_speed
   const { error: insertErr } = await supabase
     .from('telemetry')
     .insert({
       node_id:     node.id,
-      irradiance:  solar_yield  ?? null,   // irradiance in W/m²
-      watts:       null,                   // power output — firmware doesn't send this yet
-      pan_angle:   panel_angle  ?? null,
-      tilt_angle:  tilt_angle   ?? null,
-      wind_speed:  wind_speed   ?? null,
-      wind_alert:  wind_alert   ?? false,
-      node_status: status       ?? null,
+      watts:       power_watts ?? null,
+      volts:       panel_volts ?? null,
+      pan_angle:   pan_angle_deg ?? null,
+      tilt_angle:  tilt_angle_deg ?? null,
+      wind_speed:  wind_speed_ms ?? null,
+      irradiance:  irradiance_wm2 ?? null,
+      humidity:    humidity_pct ?? null,
+      wind_alert:  wind_alert ?? false,
+      node_status: status ?? null,
     })
 
   if (insertErr) {
