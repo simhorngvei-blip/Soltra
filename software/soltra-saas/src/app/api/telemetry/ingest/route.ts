@@ -102,19 +102,27 @@ export async function POST(request: NextRequest) {
   const { error: insertErr } = await supabase
     .from('telemetry')
     .insert({
-      node_id:        node.id,
-      power_watts:    power_watts ?? null,
-      panel_volts:    panel_volts ?? null,
-      pan_angle_deg:  pan_angle_deg ?? null,
-      tilt_angle_deg: tilt_angle_deg ?? null,
-      wind_speed_ms:  wind_speed_ms ?? null,
-      irradiance_wm2: irradiance_wm2 ?? null,
-      humidity_pct:   humidity_pct ?? null,
-      lux:            lux ?? null,
-      uv_index:       uv_index ?? null,
-      battery_pct:    battery_pct ?? null,
-      wind_alert:     wind_alert ?? false,
-      node_status:    status ?? null,
+      node_id:       node.id,
+      // NOTE: DB column names (from master_schema.sql) differ from JSON field names.
+      // JSON field      → DB column
+      // power_watts     → watts
+      // panel_volts     → volts
+      // pan_angle_deg   → pan_angle
+      // tilt_angle_deg  → tilt_angle
+      // wind_speed_ms   → wind_speed
+      // irradiance_wm2  → irradiance
+      watts:         power_watts    ?? null,
+      volts:         panel_volts    ?? null,
+      pan_angle:     pan_angle_deg  ?? null,
+      tilt_angle:    tilt_angle_deg ?? null,
+      wind_speed:    wind_speed_ms  ?? null,
+      irradiance:    irradiance_wm2 ?? null,
+      humidity:      humidity_pct   ?? null,
+      lux:           lux            ?? null,
+      uv_index:      uv_index       ?? null,
+      battery_pct:   battery_pct    ?? null,
+      wind_alert:    wind_alert     ?? false,
+      node_status:   status         ?? null,
     })
 
   if (insertErr) {

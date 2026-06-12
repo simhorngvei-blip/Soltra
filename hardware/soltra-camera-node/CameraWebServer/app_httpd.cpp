@@ -14,6 +14,38 @@ static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 
 httpd_handle_t stream_httpd = NULL;
 
+// ── /capture handler ─────────────────────────────────────────────────────────
+// Returns a single JPEG still frame as image/jpeg.
+// Used by: soltra-hud-mobile LiveCameraModal (snapshot mode + REQUEST SNAPSHOT button).
+static esp_err_t capture_handler(httpd_req_t *req) {
+  turnCameraOn();
+  vTaskDelay(pdMS_TO_TICKS(300)); // Brief stabilisation after wake-up
+
+  // Flush the stale frame that was buffered while the camera was sleeping
+  camera_fb_t *flush = esp_camera_fb_get();
+  if (flush) { esp_camera_fb_return(flush); }
+
+  // Now grab the fresh frame
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("[CAPTURE] Frame grab failed");
+    turnCameraOff();
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(req, "image/jpeg");
+  httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=snapshot.jpg");
+  // Allow cross-origin requests (mobile HUD served from different origin / ngrok)
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  esp_err_t res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+
+  esp_camera_fb_return(fb);
+  turnCameraOff();
+  return res;
+}
+
 static esp_err_t stream_handler(httpd_req_t *req) {
   camera_fb_t * fb = NULL;
   esp_err_t res = ESP_OK;
@@ -70,7 +102,14 @@ void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
   // Increase max URI handlers if needed, though this is minimal
-  config.max_uri_handlers = 4; 
+  config.max_uri_handlers = 8; // /stream + /capture + room for future routes
+
+  httpd_uri_t capture_uri = {
+    .uri       = "/capture",
+    .method    = HTTP_GET,
+    .handler   = capture_handler,
+    .user_ctx  = NULL
+  };
 
   httpd_uri_t stream_uri = {
     .uri       = "/stream",
@@ -80,6 +119,7 @@ void startCameraServer() {
   };
 
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
+    httpd_register_uri_handler(stream_httpd, &capture_uri);
     httpd_register_uri_handler(stream_httpd, &stream_uri);
   }
 }

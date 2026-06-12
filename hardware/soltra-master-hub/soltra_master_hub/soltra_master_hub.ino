@@ -7,7 +7,7 @@
 //   Comment out the line below to switch to PRODUCTION mode.
 //   PRODUCTION posts telemetry to Vercel instead of your local PC.
 //
-#define ENV_LOCAL   // ← comment out this line for PRODUCTION
+// #define ENV_LOCAL   // ← comment out this line for PRODUCTION
 //
 // STEP 2 — LOCAL PC IP  (only needed when ENV_LOCAL is defined)
 //   Find your PC's IP: open PowerShell → type `ipconfig`
@@ -18,25 +18,15 @@
 // STEP 3 — PRODUCTION URL  (only needed when ENV_LOCAL is commented out)
 //   After deploying soltra-saas to Vercel, paste your URL here.
 //
-#define PROD_URL "https://soltra-green.vercel.app"  // ← your Vercel URL
+#define PROD_URL "https://soltra-saas.vercel.app"  // ← your Vercel URL
 //
 // STEP 4 — INGEST KEY
 //   Must match TELEMETRY_INGEST_KEY in your .env.local / Vercel env vars.
 //   For production, change this to a strong random secret.
 //
-#define TELEMETRY_KEY_VALUE "soltra-ingest-dev-key"  // ← change in production
+#define TELEMETRY_KEY_VALUE "soltra-ingest-prod-key-777"  // ← change in production
 //
-// STEP 5 — MOTOR CONTROLLER MAC
-//   Flash the motor controller first, open Serial Monitor at 115200 baud.
-//   Copy the MAC from: [SETUP] Motor MAC: XX:XX:XX:XX:XX:XX
-//   Replace each byte below. Re-flash the hub once. Never needs changing again.
-//
-//   Example — if Serial Monitor shows  24:6F:28:AA:BB:CC:
-//     {0x24, 0x6F, 0x28, 0xAA, 0xBB, 0xCC}
-//
-uint8_t MOTOR_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ← replace
-//
-// STEP 6 — GPS LOCATION  (for sun position calculation)
+// STEP 5 — GPS LOCATION  (for sun position calculation)
 //   Right-click your location on maps.google.com to copy coordinates.
 //
 #define LATITUDE  3.140853   // ← your latitude
@@ -72,8 +62,9 @@ uint8_t MOTOR_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ← replace
 #include <RtcDS1302.h>
 #include <ArduinoOTA.h>
 #include <Adafruit_BME280.h>
-#include <SolarCalculator.h>
+// SolarCalculator replaced with inline implementation — no library needed
 #include <Preferences.h>
+#include <HTTPUpdate.h>
 
 // ─── Resolve ENV to concrete values ───────────────────────────────────────────────
 #ifdef ENV_LOCAL
@@ -95,6 +86,13 @@ uint8_t MOTOR_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ← replace
 #define CAPTIVE_PASS "helios2025"
 
 uint8_t MOTOR_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+// ─── OTA UPDATE URL ──────────────────────────────────────────────────────────
+#ifdef ENV_LOCAL
+  #define OTA_URL "http://" LOCAL_PC_IP ":3000/api/firmware/update?type=master-hub"
+#else
+  #define OTA_URL PROD_URL "/api/firmware/update?type=master-hub"
+#endif
 
 // ─── MQTT TOPICS ─────────────────────────────────────────────────────────────
 #define TOPIC_TELEMETRY   "helios/telemetry"
@@ -144,6 +142,7 @@ const unsigned long DEC_INTERVAL  = 1000;
 const int           WIND_THRESH   = 18000;
 
 // ─── HARDWARE PINS (Heltec V3 ESP32-S3 Safe Pins) ────────────────────────────
+#define VEXT_PIN 36
 #define I2C_SDA  41
 #define I2C_SCL  42
 #define MPU_ADDR 0x68
@@ -166,6 +165,9 @@ volatile float   g_pan_angle = 184.2f;
 volatile float   g_tilt_angle = 45.0f;
 volatile float   g_irradiance = 0.0f;
 volatile int     g_ldr_values[4] = {0, 0, 0, 0};
+volatile uint32_t g_lux = 0;
+volatile float   g_battery_v = 0.0f;
+volatile float   g_uv_index = 0.0f;
 volatile bool    g_online = false;
 volatile bool    g_wind   = false;
 volatile int     g_hour   = 0;
@@ -181,6 +183,7 @@ typedef struct {
   int ldr_value;
   float uv_index;
   float ir_ratio;
+  uint32_t lux;
   float battery_v;
 } SensorPkt;
 
@@ -192,6 +195,16 @@ typedef struct {
   float pan_angle;
   float tilt_angle;
 } MotorTelemetryPkt;
+
+typedef struct {
+  uint8_t magic; // 0x99
+  uint8_t device_type; // 0=Motor, 1..4=Sensor, 5=Camera
+} PairingReqPkt;
+
+typedef struct {
+  uint8_t magic; // 0xAA
+  uint8_t channel;
+} PairingAckPkt;
 
 SensorPkt       rxPkt;
 MotorPkt        txPkt;
@@ -207,12 +220,43 @@ void routeMotor(int cmd);
 
 // ─── ESP-NOW CALLBACKS ───────────────────────────────────────────────────────
 void onRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
+  if (len == sizeof(PairingReqPkt) && data[0] == 0x99) {
+    PairingReqPkt req; memcpy(&req, data, sizeof(req));
+    Serial.printf("[PAIRING] Request from type %d\n", req.device_type);
+    
+    // Add the sender as a peer so we can reply with an ACK
+    if (!esp_now_is_peer_exist(info->src_addr)) {
+      esp_now_peer_info_t p = {};
+      memcpy(p.peer_addr, info->src_addr, 6);
+      p.channel = WiFi.channel();
+      p.encrypt = false;
+      esp_now_add_peer(&p);
+    }
+
+    // If it's a motor controller, save its MAC for telemetry routing
+    if (req.device_type == 0) {
+      memcpy(MOTOR_MAC, info->src_addr, 6);
+      prefs.begin("soltra", false);
+      prefs.putBytes("motor_mac", MOTOR_MAC, 6);
+      prefs.end();
+      Serial.println("[PAIRING] Motor Controller paired!");
+    }
+
+    // Send ACK back
+    PairingAckPkt ack = {0xAA, WiFi.channel()};
+    esp_now_send(info->src_addr, (uint8_t*)&ack, sizeof(ack));
+    return;
+  }
+
   if (len == sizeof(SensorPkt)) {
     memcpy(&rxPkt, data, sizeof(rxPkt));
     portENTER_CRITICAL_ISR(&mux);
     if (rxPkt.node_id >= 1 && rxPkt.node_id <= 4)
       g_ldr_values[rxPkt.node_id - 1] = rxPkt.ldr_value;
     g_irradiance = (float)rxPkt.ldr_value;
+    g_lux = rxPkt.lux;
+    g_battery_v = rxPkt.battery_v;
+    g_uv_index = rxPkt.uv_index;
     g_online = true;
     portEXIT_CRITICAL_ISR(&mux);
   } else if (len == sizeof(MotorTelemetryPkt)) {
@@ -293,14 +337,17 @@ void publishTelemetry() {
     return;
   }
 
-  float ws, wa_watts, vo_volts, pa_pan, ta_tilt, ir_irrad, hum;
+  float ws, wa_watts, vo_volts, pa_pan, ta_tilt, hum;
+  uint32_t rx_lux;
+  float rx_bat_v, rx_uv;
   bool wa, no_;
   char st[24];
 
   portENTER_CRITICAL(&mux);
   ws = g_ws; wa_watts = g_watts; vo_volts = g_volts;
-  pa_pan = g_pan_angle; ta_tilt = g_tilt_angle; ir_irrad = g_irradiance;
+  pa_pan = g_pan_angle; ta_tilt = g_tilt_angle;
   hum = g_humidity;
+  rx_lux = g_lux; rx_bat_v = g_battery_v; rx_uv = g_uv_index;
   wa = g_wind; no_ = g_online;
   strncpy(st, (const char*)g_status, 24);
   portEXIT_CRITICAL(&mux);
@@ -308,17 +355,23 @@ void publishTelemetry() {
   String mac = WiFi.macAddress();
   mac.toUpperCase();
 
+  int battery_pct = 0;
+  if (rx_bat_v >= 4.2f) battery_pct = 100;
+  else if (rx_bat_v <= 3.3f) battery_pct = 0;
+  else battery_pct = (int)((rx_bat_v - 3.3f) / (4.2f - 3.3f) * 100.0f);
+
+  float irradiance_wm2 = (float)rx_lux * 0.0079f;
+
   char buf[512];
-  // Field names match /api/telemetry/ingest expectations exactly:
-  // solar_yield = irradiance in W/m², panel_angle = pan_angle
   snprintf(buf, sizeof(buf),
-    "{\"node_mac\":\"%s\",\"wind_speed\":%.1f,\"solar_yield\":%.1f,"
-    "\"panel_angle\":%.1f,\"tilt_angle\":%.1f,"
-    "\"wind_alert\":%s,\"irradiance\":%.1f,\"humidity\":%.1f,"
-    "\"node_online\":%s,\"status\":\"%s\"}",
-    mac.c_str(), ws, ir_irrad, pa_pan, ta_tilt,
-    wa ? "true" : "false", ir_irrad, hum,
-    no_ ? "true" : "false", st);
+    "{\"node_mac\":\"%s\",\"battery_pct\":%d,\"uv_index\":%.1f,\"lux\":%u,"
+    "\"irradiance_wm2\":%.1f,\"humidity_pct\":%.1f,\"power_watts\":%.1f,\"panel_volts\":%.1f,"
+    "\"wind_speed_ms\":%.1f,\"wind_alert\":%s,\"pan_angle_deg\":%.1f,\"tilt_angle_deg\":%.1f,"
+    "\"status\":\"%s\"}",
+    mac.c_str(), battery_pct, rx_uv, rx_lux,
+    irradiance_wm2, hum, wa_watts, vo_volts,
+    ws, wa ? "true" : "false", pa_pan, ta_tilt,
+    st);
 
   Serial.print("[MQTT] TX → "); Serial.println(buf);
 
@@ -345,6 +398,38 @@ void readMPU() {
   int16_t y = Wire.read() << 8 | Wire.read();
   Wire.read(); Wire.read();
   portENTER_CRITICAL(&mux); g_AcX = x; g_AcY = y; portEXIT_CRITICAL(&mux);
+}
+
+// ─── INLINE SOLAR POSITION (no external library needed) ─────────────────────
+void calcSolarPosition(int year, int month, int day, int hour, int minute, int second,
+                       double lat, double lon, double &azimuth, double &elevation) {
+  int a = (14 - month) / 12;
+  int y = year + 4800 - a;
+  int m = month + 12 * a - 3;
+  double JD = day + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045;
+  JD += (hour - 12) / 24.0 + minute / 1440.0 + second / 86400.0;
+  double T  = (JD - 2451545.0) / 36525.0;
+  double L0 = fmod(280.46646 + 36000.76983 * T, 360.0);
+  double M  = (357.52911 + 35999.05029 * T - 0.0001537 * T * T) * DEG_TO_RAD;
+  double C  = (1.914602 - 0.004817*T - 0.000014*T*T)*sin(M)
+            + (0.019993 - 0.000101*T)*sin(2*M)
+            + 0.000289*sin(3*M);
+  double lam = fmod(L0 + C - 0.00569 - 0.00478*sin((125.04-1934.136*T)*DEG_TO_RAD), 360.0) * DEG_TO_RAD;
+  double eps = (23.439291 - 0.013004*T) * DEG_TO_RAD;
+  double dec = asin(sin(eps)*sin(lam));
+  double RA  = atan2(cos(eps)*sin(lam), cos(lam)) * RAD_TO_DEG;
+  if (RA < 0) RA += 360.0;
+  double GMST = fmod(280.46061837 + 360.98564736629*(JD-2451545.0) + 0.000387933*T*T, 360.0);
+  if (GMST < 0) GMST += 360.0;
+  double HA = fmod(GMST + lon - RA, 360.0);
+  if (HA > 180) HA -= 360.0; if (HA < -180) HA += 360.0;
+  HA *= DEG_TO_RAD;
+  double latR = lat * DEG_TO_RAD;
+  double sinAlt = sin(latR)*sin(dec) + cos(latR)*cos(dec)*cos(HA);
+  elevation = asin(constrain(sinAlt, -1.0, 1.0)) * RAD_TO_DEG;
+  double cosAz = (sin(dec) - sin(latR)*sinAlt) / (cos(latR)*cos(asin(constrain(sinAlt,-1.0,1.0))));
+  azimuth = acos(constrain(cosAz, -1.0, 1.0)) * RAD_TO_DEG;
+  if (sin(HA) > 0) azimuth = 360.0 - azimuth;
 }
 
 void decisionEngine() {
@@ -427,6 +512,19 @@ void decisionEngine() {
 void cloudTask(void*) {
   Serial.println("[Core0] Cloud task START");
 
+  pinMode(0, INPUT_PULLUP);
+  delay(100);
+  if (digitalRead(0) == LOW) {
+    Serial.println("[Core0] BOOT button held — Factory Reset!");
+    WiFiManager wm;
+    wm.resetSettings();
+    prefs.begin("soltra", false);
+    prefs.clear();
+    prefs.end();
+    Serial.println("[Core0] Reset complete. Rebooting...");
+    ESP.restart();
+  }
+
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);
   if (!wm.autoConnect(CAPTIVE_AP, CAPTIVE_PASS)) {
@@ -445,11 +543,20 @@ void cloudTask(void*) {
   if (esp_now_init() == ESP_OK) {
     esp_now_register_recv_cb(onRecv);
     esp_now_register_send_cb(onSent);
-    esp_now_peer_info_t p = {};
-    memcpy(p.peer_addr, MOTOR_MAC, 6);
-    p.channel = currentChannel;  // ← Synced to actual WiFi channel
-    p.encrypt = false;
-    esp_now_add_peer(&p);
+    
+    // Load Motor MAC from preferences if it exists
+    prefs.begin("soltra", true);
+    if (prefs.getBytesLength("motor_mac") == 6) {
+      prefs.getBytes("motor_mac", MOTOR_MAC, 6);
+      Serial.printf("[Core0] Loaded Motor MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+        MOTOR_MAC[0], MOTOR_MAC[1], MOTOR_MAC[2], MOTOR_MAC[3], MOTOR_MAC[4], MOTOR_MAC[5]);
+      esp_now_peer_info_t p = {};
+      memcpy(p.peer_addr, MOTOR_MAC, 6);
+      p.channel = currentChannel;
+      p.encrypt = false;
+      esp_now_add_peer(&p);
+    }
+    prefs.end();
     // Publish hub's channel so sensor nodes can read it (via MQTT)
     char chanBuf[32];
     snprintf(chanBuf, sizeof(chanBuf), "{\"channel\":%d}", currentChannel);
@@ -473,6 +580,16 @@ void cloudTask(void*) {
   if (mqtt.connected()) {
     mqtt.publish("helios/config/channel", chanBuf, true); // Retained message
     Serial.printf("[MQTT] Published channel config: %s\n", chanBuf);
+  }
+
+  // Check for OTA Update
+  Serial.println("[OTA] Checking for cloud firmware update...");
+  httpUpdate.rebootOnUpdate(true);
+  t_httpUpdate_return ret = httpUpdate.update(tlsClient, OTA_URL);
+  switch (ret) {
+    case HTTP_UPDATE_FAILED: Serial.printf("[OTA] Update failed (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str()); break;
+    case HTTP_UPDATE_NO_UPDATES: Serial.println("[OTA] No updates available"); break;
+    case HTTP_UPDATE_OK: Serial.println("[OTA] Update OK"); break;
   }
 
   unsigned long lastPub = 0, lastBeat = 0;
@@ -511,17 +628,31 @@ void radioTask(void*) {
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200); delay(1000);
+
+  // Turn on Vext to power external I2C sensors (active LOW on Heltec V3)
+  pinMode(VEXT_PIN, OUTPUT);
+  digitalWrite(VEXT_PIN, LOW);
+  delay(50); // give sensors time to power up
+
   Serial.println("\n==============================================");
   Serial.println(" PROJECT SOLTRA — Master Hub");
-  Serial.printf(" ENV: %s\n", SOLTRA_ENV == 0 ? "LOCAL" : "PRODUCTION");
+#ifdef ENV_LOCAL
+  Serial.println(" ENV: LOCAL");
+#else
+  Serial.println(" ENV: PRODUCTION");
+#endif
   Serial.printf(" TELEMETRY_URL: %s\n", TELEMETRY_URL);
   Serial.println("==============================================");
 
   Wire.begin(I2C_SDA, I2C_SCL);
-  Wire.beginTransmission(MPU_ADDR); Wire.write(0x6B); Wire.write(0); Wire.endTransmission(true);
-  Serial.println("[HW] MPU6050 OK");
+  Wire.beginTransmission(MPU_ADDR); Wire.write(0x6B); Wire.write(0); 
+  if (Wire.endTransmission(true) == 0) {
+    Serial.println("[HW] MPU6050 OK");
+  } else {
+    Serial.println("[HW] MPU6050 NOT found (check wiring)!");
+  }
 
-  if (!bme.begin(0x76, &Wire)) {
+  if (!bme.begin(0x76, &Wire) && !bme.begin(0x77, &Wire)) {
     Serial.println("[HW] BME280 NOT found (check wiring)!");
   } else {
     Serial.println("[HW] BME280 OK");

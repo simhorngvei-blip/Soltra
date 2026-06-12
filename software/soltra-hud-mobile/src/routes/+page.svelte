@@ -228,9 +228,11 @@
 
     <div class="bg-black/50 border border-[#00d9ff]/30 p-4 w-full mb-8 mr-8 text-white text-sm" style="font-family: monospace;">
       <div class="mb-2 text-[#00d9ff]">&gt; LINK {$mqttStatus}</div>
-      <div class="flex justify-between"><span>LUX:</span> <span>{$telemetry.solar_yield ? $telemetry.solar_yield.toFixed(1) + ' W/m²' : '-- W/m²'}</span></div>
-      <div class="flex justify-between"><span>PANELS:</span> <span>{$telemetry.panel_angle ? $telemetry.panel_angle.toFixed(1) + '°' : 'OPTIMIZED'}</span></div>
-      <div class="flex justify-between"><span>WIND:</span> <span>{$telemetry.wind_speed ? $telemetry.wind_speed.toFixed(1) + ' m/s' : '-- m/s'}</span></div>
+      <div class="flex justify-between"><span>TRUE LUX:</span> <span>{$telemetry.lux != null ? $telemetry.lux + ' lx' : '-- lx'}</span></div>
+      <div class="flex justify-between"><span>IRRADIANCE:</span> <span>{$telemetry.irradiance_wm2 != null ? $telemetry.irradiance_wm2.toFixed(1) + ' W/m²' : '-- W/m²'}</span></div>
+      <div class="flex justify-between"><span>BATTERY:</span> <span>{$telemetry.battery_pct != null ? $telemetry.battery_pct + '%' : '--%'}</span></div>
+      <div class="flex justify-between"><span>PANELS:</span> <span>{$telemetry.pan_angle_deg != null ? $telemetry.pan_angle_deg.toFixed(1) + '°' : 'OPTIMIZED'}</span></div>
+      <div class="flex justify-between"><span>WIND:</span> <span>{$telemetry.wind_speed_ms != null ? $telemetry.wind_speed_ms.toFixed(1) + ' m/s' : '-- m/s'}</span></div>
     </div>
   </div>
 

@@ -53,6 +53,11 @@ software/soltra-hud/src/assets/main3.mp4
 # Audio reference files
 software/soltra-tts/profiles/**/reference.wav
 
+# AI Models & Audio Output
+*.onnx
+*.bin
+*.wav
+
 # ─── Logs ────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
@@ -64,6 +69,7 @@ package-lock.json
 
 # --- Private / Sensitive -------------------------------------------------------
 Helios_Final_Report/
+NEW_SB
 
 # Documentation
 docs/

@@ -8,19 +8,7 @@
 //       to the internet directly. All cloud traffic flows through
 //       the Master Hub. Only the Hub needs the ENV toggle.
 //
-// STEP 1 — HUB MAC ADDRESS
-//   This must match the WiFi MAC of your Heltec Master Hub.
-//   How to find it:
-//     a) Flash the Master Hub, open Serial Monitor at 115200 baud.
-//     b) Look for: [Core0] WiFi OK | MAC=XX:XX:XX:XX:XX:XX | CH=N
-//     c) Copy that MAC, convert XX to 0xXX bytes, paste below.
-//
-//   Example — MAC=F0:9E:9E:77:7B:F4:
-//     {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}
-//
-uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; // ← replace with your hub MAC
-//
-// STEP 2 — CLEAR-CHANNEL BUTTON PIN
+// STEP 1 — CLEAR-CHANNEL BUTTON PIN
 //   Hold this GPIO on power-up to clear the stored WiFi channel,
 //   forcing the motor controller to re-discover it from the hub.
 //   GPIO 0 = BOOT button on most ESP32 Dev Kit V1 boards.
@@ -36,14 +24,10 @@ uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; // ← replace with yo
  *
  * ─── ZERO-CONFIGURATION SETUP ────────────────────────────────────────────────
  * 1. Flash this firmware.
- * 2. Open Serial Monitor at 115200 baud.
- * 3. On FIRST boot, note the MAC address printed as:
- *      [SETUP] Motor MAC: XX:XX:XX:XX:XX:XX
- * 4. Enter that MAC into the Master Hub STEP 5 config block.
- *    Re-flash the hub once. Done — no further changes needed.
+ * 2. On FIRST boot, the controller scans channels 1-13 for the Master Hub.
+ * 3. Once paired, the channel and Hub MAC are saved to flash.
  *
- * WiFi Channel: Auto-synced with the hub via ESP-NOW, saved to flash.
- *               Hold BOOT button (STEP 2 pin) on power-up to clear.
+ * Hold BOOT button (STEP 1 pin) on power-up to clear saved pairing.
  * ──────────────────────────────────────────────────────────────────────
  *
  * Hardware Connections:
@@ -73,6 +57,20 @@ typedef struct {
 } MotorTelemetryPkt;
 MotorTelemetryPkt txPkt;
 esp_now_peer_info_t peerInfo;
+
+typedef struct {
+  uint8_t magic; // 0x99
+  uint8_t device_type; 
+} PairingReqPkt;
+
+typedef struct {
+  uint8_t magic; // 0xAA
+  uint8_t channel;
+} PairingAckPkt;
+
+uint8_t HUB_MAC[6] = {0};
+bool hub_paired = false;
+volatile bool got_ack = false;
 
 MPU6050 mpu(0x69);
 
@@ -143,29 +141,32 @@ void executeCommand(int cmd) {
 }
 
 void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
-  memcpy(&rxPkt, data, sizeof(rxPkt));
-  Serial.printf("[ESP-NOW] Cmd received: %d\n", rxPkt.command);
-  executeCommand(rxPkt.command);
+  if (len == sizeof(PairingAckPkt) && data[0] == 0xAA) {
+    PairingAckPkt ack; memcpy(&ack, data, sizeof(ack));
+    memcpy(HUB_MAC, info->src_addr, 6);
+    got_ack = true;
+    Serial.printf("[PAIRING] Got ACK from Hub on channel %d!\n", ack.channel);
+    return;
+  }
+  if (len == sizeof(MotorPkt)) {
+    memcpy(&rxPkt, data, sizeof(rxPkt));
+    Serial.printf("[ESP-NOW] Cmd received: %d\n", rxPkt.command);
+    executeCommand(rxPkt.command);
+  }
 }
 
-// ─── READ STORED CHANNEL OR DEFAULT ──────────────────────────────────────────
-int getStoredChannel() {
-  prefs.begin("soltra", true);  // read-only namespace
-  int ch = prefs.getInt("wifi_channel", -1);
-  prefs.end();
-  return ch;
-}
-
-void saveChannel(int channel) {
-  prefs.begin("soltra", false);
-  prefs.putInt("wifi_channel", channel);
-  prefs.end();
-  Serial.printf("[Prefs] Saved WiFi channel: %d\n", channel);
+void OnDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
+  if (status != ESP_NOW_SEND_SUCCESS && hub_paired) {
+      Serial.println("[ESP-NOW] Send failed. Clearing pairing config to retry next boot.");
+      prefs.begin("soltra-motor", false);
+      prefs.clear();
+      prefs.end();
+  }
 }
 
 void clearChannel() {
-  prefs.begin("soltra", false);
-  prefs.remove("wifi_channel");
+  prefs.begin("soltra-motor", false);
+  prefs.clear();
   prefs.end();
   Serial.println("[Prefs] Cleared WiFi channel — will re-discover on next boot");
 }
@@ -175,14 +176,12 @@ void setup() {
   Wire.setClock(400000);
   Serial.begin(115200);
 
-  // ── Always print MAC on boot ───────────────────────────────────────────────
   WiFi.mode(WIFI_STA);
-  WiFi.begin();  // Initialize WiFi stack so macAddress() is available
   delay(200);
   Serial.println(F("\n=============================================="));
   Serial.println(F(" PROJECT SOLTRA — Motor Controller"));
   Serial.print(F(" [SETUP] Motor MAC: "));
-  Serial.println(WiFi.macAddress());  // ← Copy this into master hub MOTOR_MAC
+  Serial.println(WiFi.macAddress());
   Serial.println(F("=============================================="));
 
   // ── CLEAR CHANNEL button check ────────────────────────────────────────────
@@ -193,24 +192,82 @@ void setup() {
     Serial.println("[Setup] Boot button held — channel cleared. Reboot to re-discover.");
   }
 
-  // ── Determine WiFi channel ────────────────────────────────────────────────
-  int wifi_channel = getStoredChannel();
-  if (wifi_channel == -1) {
-    // No channel saved — default to 1 and note that hub will publish channel
-    // on helios/config/channel. Users can also check hub Serial Monitor.
-    wifi_channel = 1;
-    Serial.println("[Setup] No stored channel. Defaulting to channel 1.");
-    Serial.println("[Setup] Check hub Serial Monitor for actual channel, then");
-    Serial.println("[Setup] hold BOOT button on next power-up if channel differs.");
-    saveChannel(wifi_channel);
-  } else {
-    Serial.printf("[Setup] Using stored channel: %d\n", wifi_channel);
+  esp_wifi_set_promiscuous(true);
+
+  prefs.begin("soltra-motor", false);
+  int wifi_channel = prefs.getInt("wifi_channel", -1);
+  size_t mac_len = prefs.getBytesLength("hub_mac");
+  if (mac_len == 6) {
+    prefs.getBytes("hub_mac", HUB_MAC, 6);
+    hub_paired = true;
+  }
+  prefs.end();
+
+  if (wifi_channel == -1 || !hub_paired) {
+    Serial.println("[Setup] Not paired. Scanning channels for Hub...");
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW init failed");
+        return;
+    }
+    esp_now_register_recv_cb(onDataRecv);
+
+    uint8_t broadcast_mac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    esp_now_peer_info_t bc_peer = {};
+    memcpy(bc_peer.peer_addr, broadcast_mac, 6);
+    bc_peer.encrypt = false;
+    
+    bool found = false;
+    for (int ch = 1; ch <= 13; ch++) {
+      esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+      bc_peer.channel = ch;
+      if (esp_now_is_peer_exist(broadcast_mac)) {
+        esp_now_del_peer(broadcast_mac);
+      }
+      esp_now_add_peer(&bc_peer);
+
+      PairingReqPkt req = {0x99, 0}; // 0 = Motor Controller
+      got_ack = false;
+      esp_now_send(broadcast_mac, (uint8_t*)&req, sizeof(req));
+      
+      delay(150);
+      if (got_ack) {
+        wifi_channel = ch;
+        found = true;
+        prefs.begin("soltra-motor", false);
+        prefs.putInt("wifi_channel", wifi_channel);
+        prefs.putBytes("hub_mac", HUB_MAC, 6);
+        prefs.end();
+        break;
+      }
+    }
+    
+    if (!found) {
+      Serial.println("[Setup] Hub not found. Rebooting to retry.");
+      ESP.restart();
+    }
   }
 
-  // Set ESP32 to the correct WiFi channel for ESP-NOW
-  esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(false);
+
+  esp_now_deinit();
+  if (esp_now_init() != ESP_OK) {
+    Serial.println(F("[ESP-NOW] Init FAILED"));
+    return;
+  }
+  
+  esp_now_register_recv_cb(onDataRecv);
+  esp_now_register_send_cb(OnDataSent);
+
+  memcpy(peerInfo.peer_addr, HUB_MAC, 6);
+  peerInfo.channel = wifi_channel;
+  peerInfo.encrypt = false;
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println(F("[ESP-NOW] Add peer FAILED"));
+    return;
+  }
+
+  Serial.printf("[ESP-NOW] Ready on channel %d. Listening for commands.\n", wifi_channel);
 
   // ── Init MPU6050 ─────────────────────────────────────────────────────────
   mpu.initialize();
@@ -241,23 +298,6 @@ void setup() {
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
-
-  // ── ESP-NOW ───────────────────────────────────────────────────────────────
-  if (esp_now_init() != ESP_OK) {
-    Serial.println(F("[ESP-NOW] Init FAILED"));
-    return;
-  }
-  esp_now_register_recv_cb(onDataRecv);
-
-  memcpy(peerInfo.peer_addr, HUB_MAC, 6);
-  peerInfo.channel = wifi_channel;
-  peerInfo.encrypt = false;
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println(F("[ESP-NOW] Add peer FAILED"));
-    return;
-  }
-
-  Serial.printf("[ESP-NOW] Ready on channel %d. Listening for commands.\n", wifi_channel);
 }
 
 void loop() {

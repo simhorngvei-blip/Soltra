@@ -44,6 +44,15 @@ ALLOWED_ORIGINS = [
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("Soltra-tts")
 
+# --- Structured JSON Logger ---
+LOGS_DIR = Path(__file__).parent / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+json_logger = logging.getLogger("TTS_JSON")
+json_logger.setLevel(logging.INFO)
+json_handler = logging.FileHandler(LOGS_DIR / "tts.log")
+json_handler.setFormatter(logging.Formatter('%(message)s'))
+json_logger.addHandler(json_handler)
+
 app = FastAPI(title="Soltra TTS (Kokoro + Chatterbox)", version="2.0.0")
 
 app.add_middleware(
@@ -279,6 +288,7 @@ async def generate_speech(
     profile_id: str = Form(...),
     language: str = Form("en-us"),
 ):
+    start_time = time.time()
     if _semaphore.locked():
         raise HTTPException(status_code=429, detail="Too Many Requests. The server is currently processing audio.")
 
@@ -304,64 +314,103 @@ async def generate_speech(
         async with _semaphore:
             engine_used = "chatterbox"
             fallback_triggered = False
-            # 1. Try Kokoro First if requested
-            if use_kokoro:
-                try:
-                    await ensure_kokoro_model()
-                    engine_used = "kokoro"
-                    yield _create_wav_header(24000) # Kokoro native 24kHz
+            total_audio_bytes = 0
+            try:
+                # 1. Try Kokoro First if requested
+                if use_kokoro:
+                    try:
+                        await ensure_kokoro_model()
+                        engine_used = "kokoro"
+                        yield _create_wav_header(24000) # Kokoro native 24kHz
+                        for chunk in chunks:
+                            def _generate_kokoro():
+                                kokoro_lang = "en-us" if language == "en" else language
+                                samples, _ = _kokoro_model.create(chunk, voice=profile_id, speed=1.0, lang=kokoro_lang)
+                                return np.asarray(samples, dtype=np.float32)
+                            
+                            audio_np = await asyncio.to_thread(_generate_kokoro)
+                            audio_int16 = (audio_np * 32767).clip(-32768, 32767).astype(np.int16)
+                            chunk_bytes = audio_int16.tobytes()
+                            total_audio_bytes += len(chunk_bytes)
+                            yield chunk_bytes
+                            
+                    except Exception as e:
+                        logger.error(f"Kokoro engine failed: {e}. Auto-falling back to Chatterbox.")
+                        fallback_triggered = True
+
+                # 2. Use Chatterbox if explicit clone requested OR Kokoro failed
+                if not use_kokoro or fallback_triggered:
+                    engine_used = "chatterbox"
+                    await ensure_chatterbox_model()
+                    
+                    # If auto-fallback triggered, use default Chatterbox profile
+                    fallback_ref = ref_audio
+                    if not fallback_ref:
+                        available_profiles = _get_profiles()
+                        if available_profiles:
+                            fallback_ref = available_profiles[0].get("audio_file")
+                    
+                    import torch
+                    sample_rate = getattr(_chatterbox_model, "sr", None) or getattr(_chatterbox_model, "sample_rate", 24000)
+                    # Yield header matching active model's sample rate
+                    yield _create_wav_header(sample_rate)
+
                     for chunk in chunks:
-                        def _generate_kokoro():
-                            kokoro_lang = "en-us" if language == "en" else language
-                            samples, _ = _kokoro_model.create(chunk, voice=profile_id, speed=1.0, lang=kokoro_lang)
-                            return np.asarray(samples, dtype=np.float32)
-                        
-                        audio_np = await asyncio.to_thread(_generate_kokoro)
+                        def _generate_chatterbox():
+                            wav = _chatterbox_model.generate(
+                                chunk,
+                                language_id=language[:2], # Chatterbox expects 'en', Kokoro expects 'en-us'
+                                audio_prompt_path=fallback_ref,
+                                **lang_defaults
+                            )
+                            if isinstance(wav, torch.Tensor):
+                                return wav.squeeze().cpu().numpy().astype(np.float32)
+                            return np.asarray(wav, dtype=np.float32)
+
+                        audio_np = await asyncio.to_thread(_generate_chatterbox)
                         audio_int16 = (audio_np * 32767).clip(-32768, 32767).astype(np.int16)
-                        yield audio_int16.tobytes()
-                        
-                except Exception as e:
-                    logger.error(f"Kokoro engine failed: {e}. Auto-falling back to Chatterbox.")
-                    fallback_triggered = True
+                        chunk_bytes = audio_int16.tobytes()
+                        total_audio_bytes += len(chunk_bytes)
+                        yield chunk_bytes
 
-            # 2. Use Chatterbox if explicit clone requested OR Kokoro failed
-            if not use_kokoro or fallback_triggered:
-                engine_used = "chatterbox"
-                await ensure_chatterbox_model()
-                
-                # If auto-fallback triggered, use default Chatterbox profile
-                fallback_ref = ref_audio
-                if not fallback_ref:
-                    available_profiles = _get_profiles()
-                    if available_profiles:
-                        fallback_ref = available_profiles[0].get("audio_file")
-                
+            except Exception as e:
+                # Log failure
+                gen_time = time.time() - start_time
+                log_data = {
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "engine": engine_used,
+                    "text_length": len(text),
+                    "audio_duration_sec": 0,
+                    "generation_time_sec": round(gen_time, 2),
+                    "status": "failure",
+                    "error_type": type(e).__name__,
+                    "profile_id": profile_id
+                }
+                json_logger.info(json.dumps(log_data))
+                logger.error(f"Generation failed: {json.dumps(log_data)}")
+                raise
+            finally:
+                # 3. Cleanup to prevent RAM overflow
+                gc.collect()
                 import torch
-                sample_rate = getattr(_chatterbox_model, "sr", None) or getattr(_chatterbox_model, "sample_rate", 24000)
-                # Yield header matching active model's sample rate
-                yield _create_wav_header(sample_rate)
-
-                for chunk in chunks:
-                    def _generate_chatterbox():
-                        wav = _chatterbox_model.generate(
-                            chunk,
-                            language_id=language[:2], # Chatterbox expects 'en', Kokoro expects 'en-us'
-                            audio_prompt_path=fallback_ref,
-                            **lang_defaults
-                        )
-                        if isinstance(wav, torch.Tensor):
-                            return wav.squeeze().cpu().numpy().astype(np.float32)
-                        return np.asarray(wav, dtype=np.float32)
-
-                    audio_np = await asyncio.to_thread(_generate_chatterbox)
-                    audio_int16 = (audio_np * 32767).clip(-32768, 32767).astype(np.int16)
-                    yield audio_int16.tobytes()
-
-            # 3. Cleanup to prevent RAM overflow
-            gc.collect()
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Log success
+                gen_time = time.time() - start_time
+                audio_duration = total_audio_bytes / (24000 * 2) # approx 16-bit 24kHz
+                if total_audio_bytes > 0:
+                    log_data = {
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "engine": engine_used,
+                        "text_length": len(text),
+                        "audio_duration_sec": round(audio_duration, 2),
+                        "generation_time_sec": round(gen_time, 2),
+                        "status": "success",
+                        "profile_id": profile_id
+                    }
+                    json_logger.info(json.dumps(log_data))
+                    logger.info(f"Structured Log: {json.dumps(log_data)}")
 
     return StreamingResponse(
         audio_stream(), 

@@ -23,4 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-.vercel
+# Ignore massive unused files
+public/avatar.vrm
+public/avatar1.vrm
+dist/avatar.vrm
+dist/avatar1.vrm

@@ -18,6 +18,12 @@
 //
 uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; // ← replace with your hub MAC
 //
+// STEP 3 — TEST MODE
+//   Uncomment the line below to disable deep sleep. This makes continuous 
+//   flashing and testing much easier as the USB serial port won't disconnect.
+//
+#define DISABLE_DEEP_SLEEP
+//
 // ═════════════════════════════════════════════
 // END CONFIG — do not edit below unless you know what you're doing
 // ═════════════════════════════════════════════
@@ -187,6 +193,7 @@ void setup() {
     tsl_found = true;
   }
 
+read_sensors_label:
   {
     int raw_bat   = analogRead(BAT_PIN);
     float battery_v = (raw_bat / 4095.0) * 3.3 * 2.0;
@@ -239,9 +246,17 @@ sleep_now:
   digitalWrite(LED_POWER_PIN, LOW);
   digitalWrite(LED_CHARGE_PIN, LOW);
 
+#ifdef DISABLE_DEEP_SLEEP
+  Serial.println("[TEST] Delaying 2s instead of sleeping...");
+  // Turn power LED back on for the next read
+  digitalWrite(LED_POWER_PIN, HIGH);
+  delay(2000);
+  goto read_sensors_label;
+#else
   Serial.println("[SLEEP] Deep sleep 2s...");
   esp_sleep_enable_timer_wakeup(2000000ULL);
   esp_deep_sleep_start();
+#endif
 }
 
 void loop() {

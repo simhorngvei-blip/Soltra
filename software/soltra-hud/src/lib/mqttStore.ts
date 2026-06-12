@@ -73,6 +73,14 @@ export function initMqtt(config?: { host?: string, user?: string, pass?: string 
   });
 }
 
+export function closeMqtt() {
+  if (client) {
+    client.end(true);
+    client = null;
+    mqttStatus.set('DISCONNECTED');
+  }
+}
+
 export function publishCmd(cmd: number | string) {
   if (client && client.connected) {
     client.publish('helios/control/manual', String(cmd), { qos: 0 });

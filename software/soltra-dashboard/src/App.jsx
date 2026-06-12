@@ -98,7 +98,7 @@ export default function App() {
   const [shaderMode, setShaderMode] = useState('toon');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTalking, setIsTalking] = useState(false);
-  const { telemetry, telemetryHistory, loading } = useSoltraTelemetry();
+  const { telemetry, telemetryHistory, loading, sysError } = useSoltraTelemetry();
   const [weather, setWeather] = useState({ temp: '--', condition: 'Loading', location: 'KUALA LUMPUR' });
   const [showCamera, setShowCamera] = useState(false);
   const [audioAnalyser, setAudioAnalyser] = useState(null);
@@ -106,6 +106,25 @@ export default function App() {
   
   const scrollRef = useRef(null);
   const audioCtxRef = useRef(null);
+
+  if (sysError) {
+    return (
+      <div className="relative w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-[14px] font-mono tracking-[0.4em] text-zinc-600 uppercase mb-4">
+            SOLTRA PROTOCOL // OVERSEER
+          </div>
+          <div className="font-sans text-[6vw] leading-none text-red-500/80 uppercase italic select-none" style={{ letterSpacing: '-0.04em' }}>
+            OFFLINE
+          </div>
+          <div className="mt-4 text-xs font-mono text-red-400 uppercase tracking-widest bg-red-950/30 px-4 py-2 border border-red-900/40 inline-flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+            {sysError}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Weather Fetch (Open-Meteo)
   useEffect(() => {
@@ -444,6 +463,38 @@ export default function App() {
                </div>
             </motion.div>
 
+            {/* System Health Panel */}
+            <motion.div 
+              className="pointer-events-auto hud-panel hud-panel-skew-right w-[240px] mb-2"
+              initial="hidden"
+              animate="visible"
+              variants={sidePanelVariants}
+            >
+               <Crosshair className="crosshair-corner cap-tl" size={12} />
+               <Crosshair className="crosshair-corner cap-tr" size={12} />
+               <div className="hud-title">
+                  <Activity size={16} color="#00d9ff" />
+                  <span>SYSTEM HEALTH</span>
+               </div>
+               <div className="flex flex-col gap-2 mt-2">
+                 {[
+                   { id: 'NODE-01 (HUB)', status: 'online', lastSeen: new Date().toISOString() },
+                   { id: 'NODE-02 (EAST)', status: 'online', lastSeen: new Date(Date.now() - 5000).toISOString() },
+                   { id: 'NODE-03 (WEST)', status: 'offline', lastSeen: new Date(Date.now() - 3600000).toISOString() }
+                 ].map(node => (
+                   <div key={node.id} className="flex justify-between items-center text-[10px] font-mono border-b border-[rgba(255,255,255,0.1)] pb-1">
+                     <div className="flex items-center gap-2">
+                       <span className={`h-2 w-2 rounded-full ${node.status === 'online' ? 'bg-[#00d9ff] animate-pulse' : 'bg-[#ff2a2a]'}`}></span>
+                       <span className="text-[#fff] opacity-80">{node.id}</span>
+                     </div>
+                     <span className="text-[#00d9ff] opacity-60">
+                       {new Date(node.lastSeen).toLocaleTimeString([], { hour12: false })}
+                     </span>
+                   </div>
+                 ))}
+               </div>
+            </motion.div>
+
             <motion.div 
               className="pointer-events-auto hud-panel hud-panel-skew-right w-[240px]"
               initial="hidden"
@@ -465,7 +516,21 @@ export default function App() {
                    <div className="flex items-center gap-2 text-[10px] font-mono text-[#fff] opacity-60">
                      <Wind size={12}/> WIND SPD
                    </div>
-                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.wind} m/s</div>
+                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.wind ?? 'N/A'} m/s</div>
+                 </div>
+
+                 <div className="flex flex-col gap-1">
+                   <div className="flex items-center gap-2 text-[10px] font-mono text-[#fff] opacity-60">
+                     <Battery size={12}/> BATTERY
+                   </div>
+                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.battery_pct != null ? `${telemetry.battery_pct}%` : 'N/A'}</div>
+                 </div>
+
+                 <div className="flex flex-col gap-1">
+                   <div className="flex items-center gap-2 text-[10px] font-mono text-[#fff] opacity-60">
+                     <Activity size={12}/> OUTPUT PWR
+                   </div>
+                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.power_watts != null ? `${telemetry.power_watts} W` : 'N/A'}</div>
                  </div>
 
                  <div className="flex flex-col gap-1">
@@ -500,7 +565,14 @@ export default function App() {
                    <div className="flex items-center gap-2 text-[10px] font-mono text-[#fff] opacity-60">
                      <Crosshair size={12}/> AZIMUTH
                    </div>
-                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.azimuth}°</div>
+                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.azimuth ?? 'N/A'}°</div>
+                 </div>
+
+                 <div className="flex flex-col gap-1">
+                   <div className="flex items-center gap-2 text-[10px] font-mono text-[#fff] opacity-60">
+                     <Sun size={12}/> TRUE LUX
+                   </div>
+                   <div className="font-mono text-sm text-[#00d9ff]">{telemetry.lux != null ? `${telemetry.lux} lx` : 'N/A'}</div>
                  </div>
 
                  <button 

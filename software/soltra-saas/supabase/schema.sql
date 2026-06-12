@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- PROJECT SOLTRA — Supabase PostgreSQL Schema
 -- Run this in your Supabase project SQL editor.
 -- ============================================================
@@ -55,15 +55,37 @@ CREATE TABLE public.telemetry (
   id            BIGSERIAL    PRIMARY KEY,
   node_id       UUID         NOT NULL REFERENCES public.nodes(id) ON DELETE CASCADE,
   recorded_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  watts         REAL,                                       -- Power output (W)
-  volts         REAL,                                       -- Panel voltage (V)
-  pan_angle     REAL,                                       -- Horizontal axis angle (°)
-  tilt_angle    REAL,                                       -- Vertical axis angle (°)
-  wind_speed    REAL,                                       -- Wind speed (m/s)
-  irradiance    REAL,                                       -- Solar irradiance (W/m²)
+  watts         REAL,                                       -- DEPRECATED: use power_watts
+  volts         REAL,                                       -- DEPRECATED: use panel_volts
+  power_watts   REAL,                                       -- Power output (W)
+  panel_volts   REAL,                                       -- Panel voltage (V)
+  pan_angle_deg REAL,                                       -- Horizontal axis angle (°)
+  tilt_angle_deg REAL,                                      -- Vertical axis angle (°)
+  wind_speed_ms REAL,                                       -- Wind speed (m/s)
+  irradiance_wm2 REAL,                                      -- Solar irradiance (W/m²)
+  lux           INTEGER,                                    -- True Lux brightness
+  uv_index      REAL,                                       -- UV Index
+  battery_pct   INTEGER,                                    -- Battery level (0-100%)
+  humidity_pct  REAL,                                       -- Humidity (%)
   wind_alert    BOOLEAN      DEFAULT FALSE,
   node_status   TEXT                                        -- Status string from firmware
 );
+
+-- ============================================================
+-- MIGRATION: RUN THESE IF UPDATING EXISTING DATABASE
+-- ============================================================
+-- ALTER TABLE public.telemetry RENAME COLUMN watts TO power_watts;
+-- ALTER TABLE public.telemetry RENAME COLUMN volts TO panel_volts;
+-- ALTER TABLE public.telemetry RENAME COLUMN pan_angle TO pan_angle_deg;
+-- ALTER TABLE public.telemetry RENAME COLUMN tilt_angle TO tilt_angle_deg;
+-- ALTER TABLE public.telemetry RENAME COLUMN wind_speed TO wind_speed_ms;
+-- ALTER TABLE public.telemetry RENAME COLUMN irradiance TO irradiance_wm2;
+-- ALTER TABLE public.telemetry RENAME COLUMN humidity TO humidity_pct;
+-- ALTER TABLE public.telemetry DROP COLUMN solar_yield;
+-- ALTER TABLE public.telemetry ADD COLUMN lux INTEGER;
+-- ALTER TABLE public.telemetry ADD COLUMN uv_index REAL;
+-- ALTER TABLE public.telemetry ADD COLUMN battery_pct INTEGER;
+-- ============================================================
 
 -- Index for fast time-range queries per node
 CREATE INDEX idx_telemetry_node_time ON public.telemetry (node_id, recorded_at DESC);

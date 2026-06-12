@@ -271,7 +271,11 @@ void connectMQTT() {
 // ==========================================
 // ESP-NOW & SENSORS
 // ==========================================
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+void OnDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status) {
+#else
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+#endif
   if (status != ESP_NOW_SEND_SUCCESS && hub_paired) {
       Serial.println("[ESP-NOW] Send failed. Clearing pairing config to retry next boot.");
       prefs.begin("soltra-cam", false);

@@ -1,3 +1,26 @@
+// ═════════════════════════════════════════════
+// SOLTRA HARDWARE CONFIG — CAMERA NODE (TEST - NO SLEEP)
+// Edit this block. Scroll down for the firmware.
+// ═════════════════════════════════════════════
+//
+// NOTE: No ENV_LOCAL / ENV_PRODUCTION toggle needed here.
+//       The camera node sends sensor data over ESP-NOW and serves
+//       a local MJPEG stream via HTTP.
+//
+// STEP 1 — ACCESS THE CAMERA STREAM
+//   After setup, the camera is accessible at:
+//   http://soltra-camera.local/stream
+//   Use that URL in soltra-hud/.env.local as VITE_CAMERA_STREAM_URL.
+//
+// STEP 2 — BOOT CONFIG CLEAR BUTTON
+//   Hold GPIO 0 (BOOT button) on power-up to clear saved WiFi.
+//
+#define CLEAR_CONFIG_PIN 0
+//
+// ═════════════════════════════════════════════
+// END CONFIG — do not edit below unless you know what you're doing
+// ═════════════════════════════════════════════
+
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <esp_now.h>
@@ -5,6 +28,8 @@
 #include <esp_sleep.h>
 #include <WiFiManager.h>
 #include <ArduinoOTA.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include "SensorModule.h" // Your custom isolated tab
 
 // ==========================================
@@ -27,11 +52,6 @@
 #define HREF_GPIO_NUM     47
 #define PCLK_GPIO_NUM     13
 
-// ==========================================
-// ⚠️ NETWORK SETTINGS ⚠️
-// ==========================================
-uint8_t HUB_MAC[] = {0xF0, 0x9E, 0x9E, 0x77, 0x7B, 0xF4}; 
-
 typedef struct { 
   int node_id; 
   int ldr_value;
@@ -40,8 +60,23 @@ typedef struct {
   float battery_v;
 } SensorPkt;
 
+typedef struct {
+  uint8_t magic; // 0x99
+  uint8_t device_type; 
+} PairingReqPkt;
+
+typedef struct {
+  uint8_t magic; // 0xAA
+  uint8_t channel;
+} PairingAckPkt;
+
 SensorPkt txData;
 esp_now_peer_info_t peerInfo;
+
+uint8_t HUB_MAC[6] = {0};
+bool hub_paired = false;
+volatile bool got_ack = false;
+Preferences prefs;
 
 // Global Camera Config
 camera_config_t camera_config; 
@@ -111,8 +146,20 @@ void turnCameraOff() {
 // ESP-NOW & SENSORS
 // ==========================================
 void OnDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
-  if (status != ESP_NOW_SEND_SUCCESS) {
-    Serial.println("[ESP-NOW] TX FAIL");
+  if (status != ESP_NOW_SEND_SUCCESS && hub_paired) {
+      Serial.println("[ESP-NOW] Send failed. Clearing pairing config to retry next boot.");
+      prefs.begin("soltra-cam", false);
+      prefs.clear();
+      prefs.end();
+  }
+}
+
+void onRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
+  if (len == sizeof(PairingAckPkt) && data[0] == 0xAA) {
+    PairingAckPkt ack; memcpy(&ack, data, sizeof(ack));
+    memcpy(HUB_MAC, info->src_addr, 6);
+    got_ack = true;
+    Serial.printf("[PAIRING] Got ACK from Hub on channel %d!\n", ack.channel);
   }
 }
 
@@ -129,12 +176,15 @@ void soltraSensorTask(void *pvParameters) {
     // =========================================
     Serial.printf("[SENSOR TEST] Bat: %.2fV | LDR: %d | UV: %.2f | IR: %.2f\n", bat, ldr, uv, ir);
 
+    txData.node_id = 4;
     txData.ldr_value = ldr;
     txData.uv_index  = uv;
     txData.ir_ratio  = ir;
     txData.battery_v = bat;
 
-    esp_now_send(HUB_MAC, (uint8_t *) &txData, sizeof(txData));
+    if (hub_paired) {
+      esp_now_send(HUB_MAC, (uint8_t *) &txData, sizeof(txData));
+    }
     
     // ⚡ Yields CPU to FreeRTOS Idle Task for power saving
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -147,14 +197,26 @@ void soltraSensorTask(void *pvParameters) {
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
-  Serial.println("\n[SYSTEM] Booting SOLTRA S3 Camera Node 4...");
+  Serial.println("\n[SYSTEM] Booting SOLTRA S3 Camera Node 4 (TEST - NO SLEEP)...");
+
+  pinMode(CLEAR_CONFIG_PIN, INPUT_PULLUP);
+  delay(100);
+  if (digitalRead(CLEAR_CONFIG_PIN) == LOW) {
+    Serial.println("[Setup] Boot button held — factory reset.");
+    WiFiManager wm;
+    wm.resetSettings();
+    prefs.begin("soltra-cam", false);
+    prefs.clear();
+    prefs.end();
+    ESP.restart();
+  }
 
   // Load settings but DO NOT turn on the camera yet
   initCameraConfig();
 
-  // ⚡ ENABLING MODEM SLEEP
+  // ⚡ DISABLE MODEM SLEEP FOR TESTING
   WiFi.mode(WIFI_STA);
-  esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+  esp_wifi_set_ps(WIFI_PS_NONE);
   
   WiFiManager wm;
   if (!wm.autoConnect("Soltra-Camera-Setup")) {
@@ -164,6 +226,11 @@ void setup() {
   
   Serial.println();
   
+  // Set up mDNS
+  if (MDNS.begin("soltra-camera")) {
+    Serial.println("[mDNS] Responder started: http://soltra-camera.local/stream");
+  }
+
   ArduinoOTA.setHostname("Soltra-Camera-Node");
   ArduinoOTA.begin();
   
@@ -174,14 +241,53 @@ void setup() {
   Serial.println("/stream");
 
   if (esp_now_init() != ESP_OK) return;
-  esp_now_register_send_cb(OnDataSent);
-  memcpy(peerInfo.peer_addr, HUB_MAC, 6);
-  peerInfo.channel = WiFi.channel(); 
-  peerInfo.encrypt = false;
-  esp_now_add_peer(&peerInfo);
+  esp_now_register_recv_cb(onRecv);
+  
+  prefs.begin("soltra-cam", false);
+  size_t mac_len = prefs.getBytesLength("hub_mac");
+  if (mac_len == 6) {
+    prefs.getBytes("hub_mac", HUB_MAC, 6);
+    hub_paired = true;
+  }
+  prefs.end();
+
+  if (!hub_paired) {
+    Serial.println("[Setup] Not paired. Sending Pairing Request on current WiFi channel...");
+    uint8_t broadcast_mac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    esp_now_peer_info_t bc_peer = {};
+    memcpy(bc_peer.peer_addr, broadcast_mac, 6);
+    bc_peer.channel = WiFi.channel();
+    bc_peer.encrypt = false;
+    esp_now_add_peer(&bc_peer);
+
+    PairingReqPkt req = {0x99, 4}; // Device type 4 = Node 4
+    for (int i=0; i<10; i++) {
+      got_ack = false;
+      esp_now_send(broadcast_mac, (uint8_t*)&req, sizeof(req));
+      delay(200);
+      if (got_ack) {
+        hub_paired = true;
+        prefs.begin("soltra-cam", false);
+        prefs.putBytes("hub_mac", HUB_MAC, 6);
+        prefs.end();
+        break;
+      }
+    }
+    esp_now_del_peer(broadcast_mac);
+  }
+
+  if (hub_paired) {
+    esp_now_register_send_cb(OnDataSent);
+    memcpy(peerInfo.peer_addr, HUB_MAC, 6);
+    peerInfo.channel = WiFi.channel(); 
+    peerInfo.encrypt = false;
+    esp_now_add_peer(&peerInfo);
+    Serial.println("[ESP-NOW] Paired with Master Hub.");
+  } else {
+    Serial.println("[ESP-NOW] Warning: Master Hub not found. Retrying pairing on next boot.");
+  }
 
   initSensors();
-  txData.node_id = 4; // ALWAYS NODE 4
 
   xTaskCreatePinnedToCore(
     soltraSensorTask, "SensorTask", 4096, NULL, 1, NULL, 1);                

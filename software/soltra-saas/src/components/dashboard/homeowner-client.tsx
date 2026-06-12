@@ -9,8 +9,9 @@ import { ManualControlPanel } from '@/components/controls/manual-control-panel'
 import { TelemetryAreaChart } from '@/components/charts/telemetry-chart'
 import { EnergyProductionChart } from '@/components/charts/energy-chart'
 import { ToastContainer, useToast } from '@/components/ui/toast'
-import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2, AlertCircle } from 'lucide-react'
+import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2, AlertCircle, Camera, CameraOff, Video, Play, Square, Download, Volume2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTTS } from '@/hooks/useTTS'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -105,7 +106,56 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   const { latest, history, isConnected, isLoading, error } = useTelemetryRealtime(nodeId)
   const [energyData, setEnergyData] = useState<EnergyBar[]>([])
   const [wasConnected, setWasConnected] = useState(false)
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
+  const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(true)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [isStreamActive, setIsStreamActive] = useState(false)
   const { toasts, toast, dismiss } = useToast()
+  const { speak, isGenerating } = useTTS()
+
+  // ── Fetch Latest Snapshot ──────────────────────────────────────────────────
+  useEffect(() => {
+    const supabase = createClient()
+
+    const fetchSnapshot = async (imagePath?: string) => {
+      setIsLoadingSnapshot(true)
+      let path = imagePath
+      if (!path) {
+        const { data } = await supabase
+          .from('camera_events')
+          .select('image_path')
+          .eq('node_id', nodeId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        if (data) path = data.image_path
+      }
+
+      if (path) {
+        const { data: urlData } = await supabase.storage
+          .from('camera-snapshots')
+          .createSignedUrl(path, 60 * 60) // 1 hour
+        if (urlData) {
+          setSnapshotUrl(urlData.signedUrl)
+          setImageLoaded(false)
+        }
+      }
+      setIsLoadingSnapshot(false)
+    }
+
+    fetchSnapshot()
+
+    const channel = supabase
+      .channel(`camera_events_${nodeId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'camera_events', filter: `node_id=eq.${nodeId}` },
+        (payload) => fetchSnapshot(payload.new.image_path)
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [nodeId])
 
   // ── Fetch real energy data from Supabase ────────────────────────────────────
   useEffect(() => {
@@ -174,6 +224,71 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
       return false
     }
   }, [nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRequestSnapshot = () => {
+    publish(`soltra/camera/${nodeMac}/cmd`, 'SNAPSHOT')
+    toast('Snapshot requested. It will appear shortly.', 'success')
+  }
+
+  const toggleStream = () => {
+    const newStatus = !isStreamActive
+    publish(`soltra/camera/${nodeMac}/cmd`, newStatus ? 'STREAM_ON' : 'STREAM_OFF')
+    setIsStreamActive(newStatus)
+    toast(newStatus ? 'Starting live stream...' : 'Stream stopped to save power.', 'success')
+  }
+
+  // ── CSV Export ──────────────────────────────────────────────────────────────
+  const handleExportCSV = () => {
+    if (!history || history.length === 0) {
+      toast('No telemetry data available to export.', 'error')
+      return
+    }
+    
+    // Create CSV header
+    const headers = ['Timestamp', 'Irradiance (W/m²)', 'Wind Speed (m/s)', 'Panel Angle (°)', 'Status']
+    
+    // Create CSV rows
+    const rows = history.map(row => [
+      new Date(row.timestamp).toLocaleString(),
+      row.solar_yield?.toFixed(2) ?? '',
+      row.wind_speed?.toFixed(2) ?? '',
+      row.panel_angle?.toFixed(2) ?? '',
+      row.status ?? ''
+    ])
+    
+    // Join all together
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    
+    // Create a Blob and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `soltra-telemetry-${nodeMac}-${new Date().toISOString().slice(0,10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast('Data exported to CSV', 'success')
+  }
+
+  // ── TTS Daily Report ────────────────────────────────────────────────────────
+  const handleTTSReport = () => {
+    if (isGenerating) return
+
+    const totalEnergyStr = energyData.reduce((sum, bar) => sum + bar.kwh, 0).toFixed(2)
+    const maxWind = history.length > 0 
+      ? Math.max(...history.map(h => h.wind_speed ?? 0)).toFixed(1)
+      : '0'
+    const statusText = friendlyStatus(latest?.status)
+
+    const reportText = `Good day. Your Soltra tracking array at ${siteName} is currently ${statusText}. Today, you have generated approximately ${totalEnergyStr} kilowatt-hours of solar energy. The maximum wind speed detected was ${maxWind} meters per second. All systems are functioning nominally.`
+
+    toast('Generating audio report...', 'success')
+    speak(reportText).catch(() => {
+      // Errors are handled by the hook
+    })
+  }
 
   if (isLoading) {
     return (
@@ -265,28 +380,84 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
         />
       </div>
 
-      {/* Camera Stream */}
-      {process.env.NEXT_PUBLIC_CAMERA_STREAM_URL && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-           <div className="px-4 py-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
-             <span className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-               <span className="relative flex h-2 w-2">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-               </span>
-               Live Camera Feed
-             </span>
-           </div>
-           <div className="aspect-video bg-black relative flex items-center justify-center">
-             {/* eslint-disable-next-line @next/next/no-img-element */}
-             <img 
-                src={process.env.NEXT_PUBLIC_CAMERA_STREAM_URL} 
-                alt="Live Camera Feed" 
-                className="w-full h-full object-cover"
-             />
-           </div>
+      {/* Camera Stream & Snapshots */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+        <div className="px-4 py-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
+          <span className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+            {isStreamActive ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                </span>
+                Live MJPEG Stream
+              </>
+            ) : (
+              <>
+                <Camera size={14} className="text-zinc-500" />
+                Latest S3 Snapshot
+              </>
+            )}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRequestSnapshot}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+            >
+              <Camera size={14} /> Request Snapshot
+            </button>
+            <button
+              onClick={toggleStream}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                isStreamActive 
+                  ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
+                  : 'bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border border-emerald-900/50'
+              }`}
+            >
+              {isStreamActive ? <><Square size={14} /> Stop Stream</> : <><Play size={14} /> Start Live Stream</>}
+            </button>
+          </div>
         </div>
-      )}
+
+        <div className="aspect-video bg-black relative flex items-center justify-center">
+          {isStreamActive && process.env.NEXT_PUBLIC_CAMERA_STREAM_URL ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img 
+              src={process.env.NEXT_PUBLIC_CAMERA_STREAM_URL} 
+              alt="Live Camera Feed" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <>
+              {isLoadingSnapshot && !snapshotUrl ? (
+                <div className="absolute inset-0 flex items-center justify-center animate-pulse bg-zinc-900">
+                  <Camera size={32} className="text-zinc-700" />
+                </div>
+              ) : snapshotUrl ? (
+                <>
+                  {!imageLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center animate-pulse bg-zinc-900">
+                      <Loader2 size={24} className="text-zinc-500 animate-spin" />
+                    </div>
+                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={snapshotUrl}
+                    alt="Latest Camera Snapshot"
+                    className={`w-full h-full object-contain transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    onLoad={() => setImageLoaded(true)}
+                  />
+                </>
+              ) : (
+                <div className="text-zinc-600 text-sm font-mono flex flex-col items-center">
+                  <CameraOff size={24} className="mb-2 opacity-50" />
+                  No snapshots yet
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Wind Alert Banner */}
       <AnimatePresence>
@@ -333,12 +504,30 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
       {/* Live Charts Row */}
       {history.length > 0 && (
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp size={14} className="text-zinc-500" />
-            <span className="text-sm font-semibold text-zinc-300">Live Telemetry Stream</span>
-            <span className="text-xs font-mono text-zinc-600">
-              ({history.length} samples)
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} className="text-zinc-500" />
+              <span className="text-sm font-semibold text-zinc-300">Live Telemetry Stream</span>
+              <span className="text-xs font-mono text-zinc-600">
+                ({history.length} samples)
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleTTSReport}
+                disabled={isGenerating}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors disabled:opacity-50"
+              >
+                {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
+                {isGenerating ? 'Generating...' : 'TTS Daily Report'}
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+            </div>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <TelemetryAreaChart

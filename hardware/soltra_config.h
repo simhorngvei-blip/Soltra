@@ -56,7 +56,7 @@
   #define TELEMETRY_KEY "soltra-ingest-dev-key"
 #else
   // Production: your Vercel deployment URL
-  #define TELEMETRY_URL "https://soltra-green.vercel.app/api/telemetry/ingest"
+  #define TELEMETRY_URL "https://soltra-saas.vercel.app/api/telemetry/ingest"
   #define TELEMETRY_KEY "soltra-ingest-dev-key"  // ← change to your production secret
 #endif
 

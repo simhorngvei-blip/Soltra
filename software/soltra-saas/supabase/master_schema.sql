@@ -90,6 +90,16 @@ CREATE TABLE IF NOT EXISTS public.telemetry (
   node_status TEXT         -- Status string from firmware ("tracking", "stow", etc.)
 );
 
+-- ─── CAMERA EVENTS (S3 Snapshots & CV) ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.camera_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  node_id UUID NOT NULL REFERENCES public.nodes(id) ON DELETE CASCADE,
+  image_path TEXT NOT NULL,
+  cv_processed BOOLEAN DEFAULT false,
+  detections JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─── Indexes ──────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_users_stripe_customer_id
   ON public.users (stripe_customer_id)
@@ -109,6 +119,10 @@ CREATE INDEX IF NOT EXISTS idx_nodes_mac_address
 CREATE INDEX IF NOT EXISTS idx_telemetry_node_recorded
   ON public.telemetry (node_id, recorded_at DESC);
 
+-- Fetching the latest snapshot for a node
+CREATE INDEX IF NOT EXISTS idx_camera_events_node_created
+  ON public.camera_events (node_id, created_at DESC);
+
 -- ─── Supabase Realtime ────────────────────────────────────────────────────────
 -- Required for useTelemetryRealtime.ts and useFleetRealtime.ts browser hooks.
 DO $$ BEGIN
@@ -117,6 +131,10 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.nodes;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.camera_events;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─── updated_at Trigger ───────────────────────────────────────────────────────
@@ -182,6 +200,7 @@ ALTER TABLE public.users     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sites     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nodes     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.telemetry ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.camera_events ENABLE ROW LEVEL SECURITY;
 
 -- Drop any old catch-all policies before creating granular ones
 DROP POLICY IF EXISTS "users_self"          ON public.users;
@@ -291,6 +310,24 @@ CREATE POLICY "telemetry_select_via_node" ON public.telemetry
 
 -- No INSERT/UPDATE/DELETE for authenticated users — hardware writes via service_role only.
 
+-- ─── RLS: CAMERA EVENTS ──────────────────────────────────────────────────────
+DROP POLICY IF EXISTS "camera_events_select_via_node" ON public.camera_events;
+CREATE POLICY "camera_events_select_via_node" ON public.camera_events
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.nodes n
+      JOIN public.sites s ON s.id = n.site_id
+      WHERE n.id = camera_events.node_id
+        AND (
+          s.owner_id = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.users u
+            WHERE u.id = auth.uid() AND u.role = 'fleet_admin'
+          )
+        )
+    )
+  );
+
 -- ─── pg_cron: Telemetry TTL Cleanup ──────────────────────────────────────────
 -- Runs daily at 03:00 UTC. Deletes telemetry older than 30 days.
 -- Prevents the free Supabase tier (500MB) from being exhausted.
@@ -303,6 +340,29 @@ SELECT cron.schedule(
     WHERE recorded_at < NOW() - INTERVAL '30 days';
   $$
 );
+
+-- Runs daily at 04:00 UTC. Deletes images older than 7 days.
+SELECT cron.schedule(
+  'soltra-camera-cleanup',
+  '0 4 * * *',
+  $$
+    DELETE FROM storage.objects 
+    WHERE bucket_id = 'camera-snapshots' 
+      AND created_at < NOW() - INTERVAL '7 days';
+      
+    DELETE FROM public.camera_events
+    WHERE created_at < NOW() - INTERVAL '7 days';
+  $$
+);
+
+-- ─── STORAGE: Camera Snapshots ───────────────────────────────────────────────
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('camera-snapshots', 'camera-snapshots', false) 
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "camera_snapshots_select" ON storage.objects;
+CREATE POLICY "camera_snapshots_select" ON storage.objects
+  FOR SELECT USING (bucket_id = 'camera-snapshots' AND auth.role() = 'authenticated');
 
 -- ─── Verification ────────────────────────────────────────────────────────────
 -- After applying, run this to confirm everything:

@@ -1,9 +1,25 @@
 <script lang="ts">
 	import { fade } from "svelte/transition";
+	import { onMount } from "svelte";
+	import { initMqtt, closeMqtt } from "$lib/mqttStore";
 	import "./layout.css";
 	import "iconify-icon";
 
 	let { data, children } = $props();
+
+	onMount(() => {
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				closeMqtt();
+			} else {
+				initMqtt();
+			}
+		};
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
+	});
 </script>
 
 <svelte:head>

@@ -4,26 +4,50 @@
 
   let { onClose } = $props();
 
-  // ESP32-S3 Sense Camera Node URL (Overwatch Node - Corner 4)
-  // Replace with the actual IP address of your XIAO ESP32-S3 Sense on the local network
-  const esp32s3Url = "http://192.168.1.100/capture";
+  // ESP32-S3 Sense Camera Node URL
+  const esp32s3Url = import.meta.env.VITE_CAMERA_URL || "http://192.168.1.100/stream";
   
-  let currentImageUrl = $state(esp32s3Url);
-  let intervalId: any;
+  // We assume the stream URL ends with /stream, so the snapshot URL is /capture
+  const streamUrl = esp32s3Url;
+  const captureUrl = esp32s3Url.replace('/stream', '/capture');
+  
+  let isStreamActive = $state(false);
+  let currentImageUrl = $state(`${captureUrl}?_cb=${new Date().getTime()}`);
   let loading = $state(true);
 
-  function refreshImage() {
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      currentImageUrl = "";
+    } else {
+      loading = true;
+      currentImageUrl = isStreamActive 
+        ? `${streamUrl}?_cb=${new Date().getTime()}`
+        : `${captureUrl}?_cb=${new Date().getTime()}`;
+    }
+  }
+  
+  function toggleStream() {
+    isStreamActive = !isStreamActive;
     loading = true;
-    currentImageUrl = `${esp32s3Url}?_cb=${new Date().getTime()}`;
+    currentImageUrl = isStreamActive 
+      ? `${streamUrl}?_cb=${new Date().getTime()}`
+      : `${captureUrl}?_cb=${new Date().getTime()}`;
+  }
+
+  function requestSnapshot() {
+    if (isStreamActive) {
+      isStreamActive = false;
+    }
+    loading = true;
+    currentImageUrl = `${captureUrl}?_cb=${new Date().getTime()}`;
   }
 
   onMount(() => {
-    // Refresh the ESP32-S3 camera snapshot every 3 seconds
-    intervalId = setInterval(refreshImage, 3000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
   });
 
   onDestroy(() => {
-    if (intervalId) clearInterval(intervalId);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
   });
 </script>
 
@@ -42,12 +66,24 @@
         {#if loading}
           <iconify-icon icon="lucide:loader" class="text-primary animate-spin ml-2"></iconify-icon>
         {:else}
-          <div class="w-2 h-2 rounded-full bg-[#ff2a2a] ml-2 animate-pulse"></div>
+          <div class="w-2 h-2 rounded-full {isStreamActive ? 'bg-[#ff2a2a] animate-ping' : 'bg-[#00d9ff]'} ml-2"></div>
         {/if}
       </div>
-      <button type="button" onclick={onClose} class="text-[#00d9ff] hover:text-white transition-colors">
-        <iconify-icon icon="lucide:x" class="text-2xl"></iconify-icon>
-      </button>
+      <div class="flex items-center gap-3">
+        <button type="button" onclick={requestSnapshot} class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-sm border border-zinc-700 transition-colors">
+          <iconify-icon icon="lucide:camera" class="text-sm"></iconify-icon> REQUEST SNAPSHOT
+        </button>
+        <button type="button" onclick={toggleStream} class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-sm transition-colors {isStreamActive ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' : 'bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border border-emerald-900/50'}">
+          {#if isStreamActive}
+            <iconify-icon icon="lucide:square" class="text-sm"></iconify-icon> STOP STREAM
+          {:else}
+            <iconify-icon icon="lucide:play" class="text-sm"></iconify-icon> START STREAM
+          {/if}
+        </button>
+        <button type="button" onclick={onClose} class="text-[#00d9ff] hover:text-white transition-colors ml-2">
+          <iconify-icon icon="lucide:x" class="text-2xl"></iconify-icon>
+        </button>
+      </div>
     </div>
 
     <!-- Camera Feed Container -->
@@ -56,16 +92,28 @@
         src={currentImageUrl} 
         alt="Live Camera Feed" 
         class="w-full h-full object-contain"
-        onload={() => loading = false}
-        onerror={() => loading = false}
+        onload={() => { loading = false; }}
+        onerror={() => { 
+          loading = false;
+          // Retry on error after 3 seconds if we are supposed to be connected
+          setTimeout(() => {
+            if (!document.hidden) {
+              loading = true;
+              currentImageUrl = isStreamActive 
+                ? `${streamUrl}?_cb=${new Date().getTime()}`
+                : `${captureUrl}?_cb=${new Date().getTime()}`;
+            }
+          }, 3000);
+        }}
       />
       
       <!-- Overlay Text -->
       <div class="absolute top-4 right-4 bg-black/60 text-white px-2 py-1 font-mono text-[10px] border border-white/20">
         CAM-01 / ONLINE
       </div>
-      <div class="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 font-mono text-[10px] border border-white/20">
-        {new Date().toISOString()}
+      <div class="absolute bottom-4 left-4 bg-black/60 {isStreamActive ? 'text-red-400' : 'text-zinc-400'} px-2 py-1 font-mono text-[10px] border border-white/20 flex flex-col gap-1">
+        <span>{isStreamActive ? '▶ LIVE MJPEG STREAM' : '📷 LATEST S3 SNAPSHOT'}</span>
+        <span>{new Date().toISOString()}</span>
       </div>
     </div>
   </div>
