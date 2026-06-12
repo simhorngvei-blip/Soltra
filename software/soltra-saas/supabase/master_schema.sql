@@ -86,6 +86,9 @@ CREATE TABLE IF NOT EXISTS public.telemetry (
   wind_speed  REAL,        -- Wind speed (m/s)
   irradiance  REAL,        -- Solar irradiance (W/m²)
   humidity    REAL,        -- Relative humidity (%) from BME280
+  lux         REAL,        -- Illuminance (lux) from TSL2591
+  uv_index    REAL,        -- UV Index from LTR390
+  battery_pct REAL,        -- Battery percentage (0-100)
   wind_alert  BOOLEAN     DEFAULT FALSE,
   node_status TEXT         -- Status string from firmware ("tracking", "stow", etc.)
 );
