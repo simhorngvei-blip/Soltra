@@ -141,7 +141,12 @@ export default function OnboardingPage() {
     setError(null)
     setIsLoading(true)
     try {
-      const site = await createSite({ name: siteName, location, timezone })
+      const res = await createSite({ name: siteName, location, timezone })
+      if ('error' in res && res.error) {
+        setError(res.error)
+        return
+      }
+      const site = res.data!
       setSiteId(site.id)
       setResolvedSiteName(site.name)
       setStep(2)
@@ -158,7 +163,12 @@ export default function OnboardingPage() {
     if (!siteId) { setError('No site created. Please go back and try again.'); return }
     setIsLoading(true)
     try {
-      const node = await createNode({ siteId, mac, label })
+      const res = await createNode({ siteId, mac, label })
+      if ('error' in res && res.error) {
+        setError(res.error)
+        return
+      }
+      const node = res.data!
       setCreatedMac(node.mac_address)
       setStep(3)
     } catch (err: unknown) {

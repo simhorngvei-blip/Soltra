@@ -26,7 +26,7 @@ export async function createSite(data: CreateSiteInput) {
 
   // Validate name
   if (!data.name?.trim()) {
-    throw new Error('Site name is required')
+    return { error: 'Site name is required' }
   }
 
   const { data: site, error } = await supabase
@@ -41,8 +41,8 @@ export async function createSite(data: CreateSiteInput) {
     .select()
     .single()
 
-  if (error) throw new Error(`Failed to create site: ${error.message}`)
-  return site as { id: string; name: string }
+  if (error) return { error: `Failed to create site: ${error.message}` }
+  return { data: site as { id: string; name: string } }
 }
 
 /**
@@ -57,7 +57,7 @@ export async function createNode(data: CreateNodeInput) {
   // Validate MAC address format
   const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/
   if (!macRegex.test(data.mac)) {
-    throw new Error('Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)')
+    return { error: 'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)' }
   }
 
   // Verify user owns the site (security check)
@@ -69,7 +69,7 @@ export async function createNode(data: CreateNodeInput) {
     .single()
 
   if (siteErr || !site) {
-    throw new Error('Site not found or access denied')
+    return { error: 'Site not found or access denied' }
   }
 
   // Check for duplicate MAC
@@ -80,7 +80,7 @@ export async function createNode(data: CreateNodeInput) {
     .single()
 
   if (existing) {
-    throw new Error('A node with this MAC address is already registered')
+    return { error: 'A node with this MAC address is already registered' }
   }
 
   const { data: node, error } = await supabase
@@ -94,6 +94,6 @@ export async function createNode(data: CreateNodeInput) {
     .select()
     .single()
 
-  if (error) throw new Error(`Failed to register node: ${error.message}`)
-  return node as { id: string; mac_address: string }
+  if (error) return { error: `Failed to register node: ${error.message}` }
+  return { data: node as { id: string; mac_address: string } }
 }
