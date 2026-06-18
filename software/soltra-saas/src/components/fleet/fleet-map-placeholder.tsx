@@ -17,7 +17,10 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
   const handleDelete = (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete the site "${name}"? This will permanently delete all associated nodes and telemetry.`)) {
       startTransition(async () => {
-        await deleteSite(id)
+        const result = await deleteSite(id)
+        if (result && !result.success) {
+          alert(`Failed to delete site: ${result.error}`)
+        }
       })
     }
   }
