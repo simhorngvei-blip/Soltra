@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import type { Node, Site } from '@/lib/types'
 import { HomeownerClient } from '@/components/dashboard/homeowner-client'
+import { MiniOverseerWidget } from '@/components/ui/mini-overseer-widget'
 
 export const metadata: Metadata = {
   title: 'My Solar Array',
@@ -60,12 +61,15 @@ export default async function HomeownerPage() {
   const primaryNode = nodes[0]
 
   return (
-    <HomeownerClient
-      nodeId={primaryNode.id}
-      nodeMac={primaryNode.mac_address}
-      nodeLabel={primaryNode.label ?? primaryNode.mac_address}
-      siteName={site.name}
-      siteTimezone={site.timezone}
-    />
+    <>
+      <HomeownerClient
+        nodeId={primaryNode.id}
+        nodeMac={primaryNode.mac_address}
+        nodeLabel={primaryNode.label ?? primaryNode.mac_address}
+        siteName={site.name}
+        siteTimezone={site.timezone}
+      />
+      <MiniOverseerWidget />
+    </>
   )
 }

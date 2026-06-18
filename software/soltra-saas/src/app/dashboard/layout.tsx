@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { signOutAction } from '@/app/actions/auth'
 import type { SoltraUser } from '@/lib/types'
-import { MiniOverseerWidget } from '@/components/ui/mini-overseer-widget'
 
 // ─── Dashboard Layout ─────────────────────────────────────────────────────────
 // Wraps all /dashboard/* pages with the sidebar.
@@ -125,9 +124,6 @@ export default async function DashboardLayout({
       <main className="flex-1 overflow-auto">
         {children}
       </main>
-
-      {/* Global AI Assistant Widget */}
-      <MiniOverseerWidget />
     </div>
   )
 }
