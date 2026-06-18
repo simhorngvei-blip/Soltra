@@ -86,7 +86,7 @@
           <div class="resume-detail-row">
             <div class="resume-detail-row-index">03</div>
             <div class="resume-detail-row-title">Sensor Node</div>
-            <div class="resume-detail-status font-bold {$telemetry.node_online ? 'text-[#00FF41]' : 'text-[#FF3B3B]'}" style="background: rgba(255,255,255,0.1)">{$telemetry.node_online ? 'ONLINE' : 'OFFLINE'}</div>
+            <div class="resume-detail-status font-bold {$telemetry.status !== '--' ? 'text-[#00FF41]' : 'text-[#FF3B3B]'}" style="background: rgba(255,255,255,0.1)">{$telemetry.status !== '--' ? 'ONLINE' : 'OFFLINE'}</div>
           </div>
         </div>
 

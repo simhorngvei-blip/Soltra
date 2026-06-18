@@ -6,7 +6,7 @@
  * No dependency on the Voicebox desktop app.
  */
 
-const SOLTRA_TTS_URL = 'http://10.0.2.2:8099';
+const SOLTRA_TTS_URL = import.meta.env.VITE_TTS_URL || 'http://10.0.2.2:8099';
 
 // Cache for the active profile
 let _activeProfileId: string | null = null;

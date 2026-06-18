@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+supabase
+python-dotenv
+ollama
+google-generativeai
+pydantic
+huggingface_hub

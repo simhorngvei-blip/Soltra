@@ -106,8 +106,10 @@ export function useSoltraMqtt({
       clientRef.current.end(true)
       clientRef.current = null
     }
-    setIsConnected(false)
-    setIsConnecting(false)
+    queueMicrotask(() => {
+      setIsConnected(false)
+      setIsConnecting(false)
+    });
   }, [])
 
   const reconnect = useCallback(() => {

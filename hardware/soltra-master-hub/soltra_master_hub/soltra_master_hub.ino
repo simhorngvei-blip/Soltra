@@ -279,20 +279,75 @@ void mqttCb(char* topic, byte* payload, unsigned int len) {
     memcpy(payloadStr, payload, len);
     payloadStr[len] = '\0';
     String msg = String(payloadStr);
-    portENTER_CRITICAL_ISR(&mux);
-    if (msg.indexOf("ephemeris") >= 0) {
-      g_ai_override = true;
-      strncpy((char*)g_ai_mode, "ephemeris", 15);
-    } else if (msg.indexOf("stow") >= 0) {
+
+    // ── Keyword mode (legacy: "ephemeris", "stow", "auto") ──────────────────
+    if (msg.indexOf("stow") >= 0) {
+      portENTER_CRITICAL_ISR(&mux);
       g_ai_override = true;
       strncpy((char*)g_ai_mode, "stow", 15);
-    } else if (msg.indexOf("auto") >= 0) {
-      g_ai_override = false;
+      portEXIT_CRITICAL_ISR(&mux);
+      Serial.println("[MQTT] AI Mode: STOW");
+      return;
     }
-    portEXIT_CRITICAL_ISR(&mux);
-    Serial.printf("[MQTT] AI Override: %s\n", msg.c_str());
+    if (msg.indexOf("auto") >= 0 && msg.indexOf("CV_SUN_TRACK") < 0) {
+      portENTER_CRITICAL_ISR(&mux);
+      g_ai_override = false;
+      portEXIT_CRITICAL_ISR(&mux);
+      Serial.println("[MQTT] AI Mode: AUTO (ephemeris)");
+      return;
+    }
+
+    // ── CV Sun Tracker: parse pan_delta / tilt_delta from sun_tracker.py ────
+    // Payload format: {"mode":"CV_SUN_TRACK","pan_delta":1.5,"tilt_delta":-0.8,...}
+    if (msg.indexOf("CV_SUN_TRACK") >= 0) {
+      // Extract pan_delta
+      float pan_delta  = 0.0f;
+      float tilt_delta = 0.0f;
+
+      int pan_idx = msg.indexOf("\"pan_delta\":");
+      if (pan_idx >= 0) pan_delta = msg.substring(pan_idx + 12).toFloat();
+
+      int tilt_idx = msg.indexOf("\"tilt_delta\":");
+      if (tilt_idx >= 0) tilt_delta = msg.substring(tilt_idx + 13).toFloat();
+
+      // Map deltas → motor commands (integer 1–9, centre 5 = hold)
+      // Pan:  positive → CW (cmd 6), negative → CCW (cmd 4)
+      // Tilt: positive → Up  (cmd 8), negative → Down (cmd 2)
+      // Combined diagonals: 7/9/1/3
+      // No-op when both are zero: cmd 5 (stop)
+      bool pan_right  = pan_delta  >  0.1f;
+      bool pan_left   = pan_delta  < -0.1f;
+      bool tilt_up    = tilt_delta >  0.1f;
+      bool tilt_down  = tilt_delta < -0.1f;
+
+      int cmd = 5; // hold
+      if      ( pan_right && tilt_up   ) cmd = 9;
+      else if ( pan_right && tilt_down ) cmd = 3;
+      else if ( pan_left  && tilt_up   ) cmd = 7;
+      else if ( pan_left  && tilt_down ) cmd = 1;
+      else if ( pan_right              ) cmd = 6;
+      else if ( pan_left               ) cmd = 4;
+      else if ( tilt_up                ) cmd = 8;
+      else if ( tilt_down              ) cmd = 2;
+
+      if (cmd != 5) {
+        portENTER_CRITICAL_ISR(&mux);
+        g_ai_override = true;
+        strncpy((char*)g_ai_mode, "CV_SUN_TRACK", 15);
+        portEXIT_CRITICAL_ISR(&mux);
+        g_manual_timeout = millis() + 1000; // auto-stop after 1s if no new CV cmd
+        routeMotor(cmd);
+        Serial.printf("[CV] pan=%.2f tilt=%.2f → motor cmd %d\n", pan_delta, tilt_delta, cmd);
+      } else {
+        Serial.printf("[CV] Sun centred — no motor command needed\n");
+      }
+      return;
+    }
+
+    Serial.printf("[MQTT] AI Override: unknown payload: %s\n", payloadStr);
     return;
   }
+
 
   char msg[8];
   memcpy(msg, payload, min((int)len, 7));

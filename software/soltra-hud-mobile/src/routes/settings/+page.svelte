@@ -11,11 +11,23 @@
     if (index === currentSettingIndex) return;
     currentSettingIndex = index;
     animate(settingsOptionElement!, {
-      translateY: index * 56,
+      translateY: index * 96,
       duration: 100,
       easing: "easeOutQuad"
     });
   }
+
+  $effect(() => {
+    if (appState.isMusicEnabled) {
+      if (appState.bgm && !appState.bgm.playing()) {
+        appState.bgm.play();
+      }
+    } else {
+      if (appState.bgm && appState.bgm.playing()) {
+        appState.bgm.pause();
+      }
+    }
+  });
 </script>
 
 <div class="h-full w-full bg-bg text-fg font-skip relative overflow-hidden flex flex-col p-8 z-10">
@@ -31,7 +43,7 @@
   </div>
 
   <div class="flex-1 max-w-4xl mx-auto w-full flex items-center justify-center">
-    <div class="flex flex-col gap-2 relative bg-black/40 p-12 rounded-lg border border-[#00d9ff]/20 backdrop-blur-md shadow-[0_0_15px_rgba(0,217,255,0.1)]">
+    <div class="flex flex-col gap-4 relative bg-black/40 p-12 rounded-lg border border-[#00d9ff]/20 backdrop-blur-md shadow-[0_0_15px_rgba(0,217,255,0.1)]">
       <h2 class="text-2xl text-[#00d9ff] tracking-widest uppercase mb-8 pb-4 border-b border-[#00d9ff]/20 w-full">◈ Preferences</h2>
       
       <div class="relative w-[32rem]">
@@ -44,7 +56,7 @@
 
         <div
           bind:this={settingsOptionElement}
-          class="w-full h-12 bg-red -z-1 absolute -top-2 -right-1 rounded-md"
+          class="w-full h-24 bg-red -z-1 absolute -top-2 -right-1 rounded-md"
         ></div>
       </div>
     </div>

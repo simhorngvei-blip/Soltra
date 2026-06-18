@@ -2,723 +2,235 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { telemetry, mqttStatus } from "$lib/mqttStore";
+  import { Activity, Server, Stethoscope, ChevronLeft, Wifi, Wind, Sun, Compass, Download } from 'lucide-svelte';
 
-  const CHARS = ["/persona_assets/char1.png", "/persona_assets/char2.png", "/persona_assets/char3.png"];
-  const MAIN_IMAGES = ["/persona_assets/mainm.jpeg", "/persona_assets/mainm2.jpeg", "/persona_assets/mainf.jpeg"];
-
-  let revealContent = $derived([
-    {
-      upper: [
-        `WIND SPEED: ${$telemetry.wind_speed ? $telemetry.wind_speed.toFixed(1) : '--'} m/s`,
-        `SOLAR YIELD: ${$telemetry.solar_yield ? $telemetry.solar_yield.toFixed(1) : '--'} W/m²`,
-        `PANEL AZIMUTH: ${$telemetry.panel_angle ? $telemetry.panel_angle.toFixed(1) : '--'}°`
-      ],
-      lower: "Helios Telemetry Matrix",
-    },
-    {
-      upper: [
-        `TRACKER STATUS: ${$telemetry.status.toUpperCase()}`,
-        `WIND ALERT: ${$telemetry.wind_alert ? 'ALERT!' : 'NOMINAL'}`,
-        `SENSOR NODE: ${$telemetry.node_online ? 'ONLINE' : 'OFFLINE'}`,
-      ],
-      lower: `Link: ${$mqttStatus} | Light: ${$telemetry.light_level}`,
-    },
-    {
-      upper: [
-        "SYSTEM VERSION 4.2.0",
-        "NODE DIAGNOSTICS: OPTIMAL",
-        "ALL ACTUATORS RESPONSIVE"
-      ],
-      lower: "diagnostics nominal",
-    },
-  ]);
-
-  const ROLES = [
-    { text: "HELIOS", color: "#e8c100", bg: "rgba(232,193,0,0.12)", border: "rgba(232,193,0,0.5)" },
-    { text: "STATUS",  color: "#4a8fff", bg: "rgba(74,143,255,0.12)", border: "rgba(74,143,255,0.5)" },
-    { text: "DIAG",  color: "#4a8fff", bg: "rgba(74,143,255,0.12)", border: "rgba(74,143,255,0.5)" },
+  const TABS = [
+    { id: "telemetry", label: "Telemetry", icon: Activity },
+    { id: "status", label: "System Status", icon: Server },
+    { id: "sensors", label: "Diagnostics", icon: Stethoscope },
   ];
 
-  const ITEMS = [
-    { id: "telemetry", label: "TELEMETRY" },
-    { id: "status", label: "SYSTEM STATUS" },
-    { id: "sensors", label: "DIAGNOSTICS" },
-  ];
+  let activeTab = $state(0);
 
-  let active = $state(0);
-  let mounted = $state(false);
-  let revealed = $state(false);
-
-  onMount(() => {
-    const t = setTimeout(() => mounted = true, 60);
-    return () => clearTimeout(t);
-  });
-
-  function handleBarClick(index: number) {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches && active === index) {
-      revealed = !revealed;
-      return;
-    }
-
-    active = index;
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
-      revealed = false;
-    }
-  }
+  // 24-hour Mock Data
+  let historicalData = $state(
+    Array.from({ length: 24 }).map((_, i) => ({
+      hour: i,
+      solarYield: Math.max(0, Math.sin((i - 6) * Math.PI / 12) * 1000 + (Math.random() * 100 - 50)),
+      windSpeed: 2 + Math.random() * 8
+    }))
+  );
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === "ArrowUp") active = Math.max(0, active - 1);
-    if (e.key === "ArrowDown") active = Math.min(ITEMS.length - 1, active + 1);
-    if (e.key === "Enter") revealed = true;
-    if (e.key === "ArrowRight") revealed = true;
-    if (e.key === "ArrowLeft") {
-      if (revealed) revealed = false;
-      else goto('/');
-    }
+    if (e.key === "ArrowUp") activeTab = Math.max(0, activeTab - 1);
+    if (e.key === "ArrowDown") activeTab = Math.min(TABS.length - 1, activeTab + 1);
     if (e.key === "Escape" || e.key === "Backspace") goto('/');
   }
+
+  function exportCSV() {
+    const headers = "Hour,SolarYield_W_m2,WindSpeed_m_s\n";
+    const rows = historicalData.map(d => `${d.hour}:00,${d.solarYield.toFixed(2)},${d.windSpeed.toFixed(2)}`).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `soltra_telemetry_${new Date().getTime()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Calculate SVG path
+  let maxYield = $derived(Math.max(...historicalData.map(d => d.solarYield), 1000));
+  let yieldPath = $derived(historicalData.map((d, i) => {
+    const x = (i / 23) * 100;
+    const y = 100 - (d.solarYield / maxYield) * 100;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' '));
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div id="menu-screen">
-  <!-- svelte-ignore a11y_media_has_caption -->
-  <video src="/persona_assets/main1.mp4" autoplay loop muted playsinline></video>
-  
-  {#if revealed}
-    <div class="sc-dim"></div>
-  {/if}
+<div class="w-full h-full bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0B0F19] to-black text-slate-300 flex flex-col p-8 box-border font-sans antialiased overflow-y-auto overflow-x-hidden relative custom-scrollbar">
+  <!-- Decorative background elements -->
+  <div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+  <div class="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-  {#if revealed}
-    <div class="sc-reveal-panel {mounted ? 'mounted' : ''}">
-      <div class="sc-reveal-upper-bar">
-        {#each revealContent[active].upper as line}
-          <div class="sc-reveal-upper-line">{line}</div>
-        {/each}
-      </div>
-      <div class="sc-reveal-lower-bar">{revealContent[active].lower}</div>
+  <!-- Header -->
+  <div class="flex items-center justify-between border-b border-white/10 pb-6 mb-8 relative z-10 shrink-0">
+    <div>
+      <h1 class="text-4xl font-bold text-white tracking-tight uppercase">System Overview</h1>
+      <p class="text-lg text-slate-400 mt-1">Real-time telemetry and 24-hour analytics</p>
     </div>
-  {/if}
-
-  {#if revealed}
-    <div class="sc-right-nav">
-      <span class="sc-nav-arrow left">◄</span>
-      <span class="sc-nav-btn">LB</span>
-      <span class="sc-nav-dot"></span>
-      <span class="sc-nav-btn">RB</span>
-      <span class="sc-nav-arrow right">►</span>
-    </div>
-  {/if}
-
-  {#if revealed}
-    <div class="sc-main-portrait-shell {mounted ? 'mounted' : ''}">
-      <img
-        class="sc-main-portrait"
-        src={MAIN_IMAGES[active]}
-        alt=""
-      />
-    </div>
-  {/if}
-
-  <div class="sc-root" role="navigation">
-    {#each ITEMS as item, i}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="sc-bar-outer {active === i ? 'active' : ''} {mounted ? 'mounted' : ''}"
-        onclick={() => handleBarClick(i)}
-        onmouseenter={() => active = i}
+    <div class="flex items-center gap-4">
+      <button 
+        class="flex items-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all border border-white/10 shadow-lg"
+        onclick={() => goto('/')}
       >
-        <div class="sc-bar-red"></div>
-        <div class="sc-bar">
-          <img class="sc-char" src={CHARS[i]} alt="" />
-          <div class="sc-bar-fill"></div>
-          <div class="sc-bar-shade"></div>
-          <div class="sc-bar-content">
-            <div class="sc-role">{ROLES[i].text}</div>
-            <div class="sc-main">
-              <div class="sc-main-top">
-                <div class="sc-label">{item.label}</div>
-              </div>
+        <ChevronLeft size={24} />
+        BACK
+      </button>
+    </div>
+  </div>
+
+  <div class="flex flex-1 gap-8 relative z-10 flex-col lg:flex-row pb-12">
+    <!-- Sidebar -->
+    <div class="w-full lg:w-80 flex flex-col gap-4 shrink-0">
+      {#each TABS as tab, i}
+        <button 
+          class="flex items-center gap-5 px-6 py-5 rounded-2xl transition-all text-left border {activeTab === i ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.15)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}"
+          onclick={() => activeTab = i}
+        >
+          <svelte:component this={tab.icon} size={28} class={activeTab === i ? 'text-blue-400' : 'text-slate-400'} />
+          <span class="font-bold text-xl">{tab.label}</span>
+        </button>
+      {/each}
+      
+      <div class="mt-4 p-6 bg-white/5 border border-white/10 rounded-2xl">
+        <div class="text-sm text-slate-500 font-mono tracking-wider mb-3">MQTT LINK</div>
+        <div class="flex items-center gap-4">
+          <div class="relative flex h-4 w-4">
+            {#if $mqttStatus === 'CONNECTED'}
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
+            {:else}
+              <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+            {/if}
+          </div>
+          <span class="text-xl font-bold text-white tracking-widest uppercase">{$mqttStatus}</span>
+        </div>
+      </div>
+
+      <button 
+        class="mt-auto flex items-center justify-center gap-3 px-6 py-5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold rounded-2xl transition-all border border-emerald-500/30 shadow-lg w-full"
+        onclick={exportCSV}
+      >
+        <Download size={24} />
+        EXPORT CSV
+      </button>
+    </div>
+
+    <!-- Main Content Panel -->
+    <div class="flex-1 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl flex flex-col gap-8 min-h-[600px]">
+      {#if activeTab === 0}
+        <!-- Telemetry -->
+        <h2 class="text-3xl font-bold text-white tracking-wider uppercase mb-2">Live Telemetry</h2>
+        
+        <!-- Live Data Grid -->
+        <div class="grid grid-cols-2 gap-8">
+          <div class="bg-black/20 border border-white/5 p-8 rounded-2xl flex flex-col items-center justify-center">
+            <Wind size={48} class="text-blue-400 mb-4" />
+            <div class="text-lg text-slate-400 font-bold tracking-widest">WIND SPEED</div>
+            <div class="text-6xl font-bold text-white mt-4 font-mono">{$telemetry.wind_speed_ms !== undefined ? $telemetry.wind_speed_ms.toFixed(1) : '--'}<span class="text-2xl text-slate-500 ml-2">m/s</span></div>
+          </div>
+          <div class="bg-black/20 border border-white/5 p-8 rounded-2xl flex flex-col items-center justify-center">
+            <Sun size={48} class="text-amber-400 mb-4" />
+            <div class="text-lg text-slate-400 font-bold tracking-widest">SOLAR YIELD</div>
+            <div class="text-6xl font-bold text-white mt-4 font-mono">{$telemetry.irradiance_wm2 !== undefined ? $telemetry.irradiance_wm2.toFixed(1) : '--'}<span class="text-2xl text-slate-500 ml-2">W/m²</span></div>
+          </div>
+          <div class="bg-black/20 border border-white/5 p-8 rounded-2xl flex flex-col items-center justify-center">
+            <Compass size={48} class="text-emerald-400 mb-4" />
+            <div class="text-lg text-slate-400 font-bold tracking-widest">PANEL AZIMUTH</div>
+            <div class="text-6xl font-bold text-white mt-4 font-mono">{$telemetry.pan_angle_deg !== undefined ? $telemetry.pan_angle_deg.toFixed(1) : '--'}&deg;</div>
+          </div>
+          <div class="bg-black/20 border border-white/5 p-8 rounded-2xl flex flex-col items-center justify-center">
+            <Activity size={48} class="text-indigo-400 mb-4" />
+            <div class="text-lg text-slate-400 font-bold tracking-widest">LIGHT LEVEL</div>
+            <div class="text-6xl font-bold text-white mt-4 font-mono">{$telemetry.lux !== undefined ? $telemetry.lux : '--'}<span class="text-2xl text-slate-500 ml-2">lx</span></div>
+          </div>
+        </div>
+
+        <!-- 24-Hour Graph -->
+        <div class="mt-4 bg-black/20 border border-white/5 p-8 rounded-2xl">
+          <div class="text-xl font-bold tracking-widest text-white mb-6 uppercase">24-Hour Yield Graph</div>
+          <div class="relative w-full h-48 mt-4 border-b border-l border-white/10 ml-8">
+            <!-- Background gradient for chart -->
+            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(59,130,246,0.3)" />
+                <stop offset="100%" stop-color="rgba(59,130,246,0.0)" />
+              </linearGradient>
+              <path d="{yieldPath} L 100 100 L 0 100 Z" fill="url(#chartGrad)" />
+              <path d="{yieldPath}" fill="none" stroke="#3b82f6" stroke-width="2" vector-effect="non-scaling-stroke" />
+            </svg>
+            <div class="absolute bottom-0 w-full flex justify-between text-xs text-slate-500 translate-y-6 font-mono pr-4">
+              <span>00:00</span>
+              <span>06:00</span>
+              <span>12:00</span>
+              <span>18:00</span>
+              <span>24:00</span>
+            </div>
+            <div class="absolute -left-14 h-full flex flex-col justify-between text-xs text-slate-500 font-mono items-end w-12">
+              <span>{Math.round(maxYield)}</span>
+              <span>{Math.round(maxYield / 2)}</span>
+              <span>0</span>
             </div>
           </div>
         </div>
-      </div>
-    {/each}
-  </div>
 
-  <div class="sc-footer {mounted ? 'mounted' : ''}">
-    <div class="sc-footer-row"><span class="sc-footer-key">↑↓</span><span>SELECT</span></div>
-    <div class="sc-footer-row"><span class="sc-footer-key">↵</span><span>REVEAL</span></div>
-    <div class="sc-footer-row"><span class="sc-footer-key">ESC</span><span>BACK</span></div>
-  </div>
-
-  <div class="sc-mobile-controls" aria-label="About mobile controls">
-    <button class="sc-mobile-btn" type="button" onclick={() => goto('/')}>
-      BACK
-    </button>
-    <button class="sc-mobile-btn" type="button" onclick={() => revealed = !revealed}>
-      {revealed ? "HIDE" : "REVEAL"}
-    </button>
+      {:else if activeTab === 1}
+        <!-- System Status -->
+        <h2 class="text-3xl font-bold text-white tracking-wider uppercase mb-6">System Status</h2>
+        <div class="flex flex-col gap-6">
+          <div class="p-8 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between">
+            <div>
+              <div class="text-lg text-slate-400 font-bold tracking-widest mb-2">TRACKER STATUS</div>
+              <div class="text-4xl font-bold text-white uppercase">{$telemetry.status}</div>
+            </div>
+            <div class="h-20 w-20 rounded-full flex items-center justify-center {$telemetry.status === 'tracking' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
+              <Server size={40} />
+            </div>
+          </div>
+          <div class="p-8 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between">
+            <div>
+              <div class="text-lg text-slate-400 font-bold tracking-widest mb-2">WIND ALERT</div>
+              <div class="text-4xl font-bold {$telemetry.wind_alert ? 'text-red-400' : 'text-emerald-400'} uppercase">{$telemetry.wind_alert ? 'ALERT ACTIVE' : 'NOMINAL'}</div>
+            </div>
+            <div class="h-20 w-20 rounded-full flex items-center justify-center {$telemetry.wind_alert ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}">
+              <Wind size={40} />
+            </div>
+          </div>
+          <div class="p-8 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between">
+            <div>
+              <div class="text-lg text-slate-400 font-bold tracking-widest mb-2">SENSOR NODE</div>
+              <div class="text-4xl font-bold text-white uppercase">{$telemetry.node_mac ? 'ONLINE' : 'OFFLINE'}</div>
+            </div>
+            <div class="h-20 w-20 rounded-full flex items-center justify-center {$telemetry.node_mac ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
+              <Wifi size={40} />
+            </div>
+          </div>
+        </div>
+      {:else}
+        <!-- Diagnostics -->
+        <h2 class="text-3xl font-bold text-white tracking-wider uppercase mb-6">Diagnostics Log</h2>
+        <div class="flex-1 bg-black/30 border border-white/5 rounded-2xl p-8 font-mono text-lg overflow-y-auto custom-scrollbar">
+          <div class="text-emerald-400 mb-6 text-xl">>> INITIATING DIAGNOSTIC SCAN...</div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">SYSTEM VERSION</span><span class="text-white font-bold">4.2.0</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">CORE TEMPERATURE</span><span class="text-emerald-400 font-bold">42&deg;C (OPTIMAL)</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">MEMORY UTILIZATION</span><span class="text-white font-bold">18.4%</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">ACTUATOR X RESPONSE</span><span class="text-emerald-400 font-bold">NOMINAL (12ms)</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">ACTUATOR Y RESPONSE</span><span class="text-emerald-400 font-bold">NOMINAL (14ms)</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">NETWORK LATENCY</span><span class="text-white font-bold">8ms</span></div>
+          <div class="flex justify-between border-b border-white/10 py-4"><span class="text-slate-300">POWER BUS VOLTAGE</span><span class="text-white font-bold">24.2V</span></div>
+          <div class="text-blue-400 mt-8 text-xl">>> ALL SYSTEMS RESPONSIVE</div>
+        </div>
+      {/if}
+    </div>
   </div>
 </div>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,400;0,700;1,700&family=Montserrat:wght@300&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&display=swap');
-
-  #menu-screen {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #000;
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
   }
-  #menu-screen > video {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
   }
-
-  .sc-root {
-    position: absolute;
-    inset: 0;
-    z-index: 6;
-    pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 6px;
-    padding-left: 0;
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.4);
+    border-radius: 6px;
   }
-
-  .sc-dim {
-    position: absolute;
-    inset: 0;
-    z-index: 12;
-    background: rgba(40, 45, 54, 0.68);
-    pointer-events: none;
-    animation: sc-dim-in 0.32s ease-out;
-  }
-
-  @keyframes sc-dim-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes sc-reveal-bar-in {
-    0% {
-      opacity: 0;
-      transform: translateX(-120px) rotate(-20deg) scaleX(0.72);
-    }
-    60% {
-      opacity: 0.96;
-      transform: translateX(18px) rotate(-20deg) scaleX(1.03);
-    }
-    100% {
-      opacity: 0.92;
-      transform: translateX(0) rotate(-20deg) scaleX(1);
-    }
-  }
-
-  @keyframes sc-portrait-in {
-    0% {
-      opacity: 0;
-      transform: translateX(78px) skewX(-8deg) scale(0.94);
-      filter: blur(8px);
-    }
-    55% {
-      opacity: 0.9;
-      transform: translateX(-8px) skewX(-8deg) scale(1.015);
-      filter: blur(0);
-    }
-    100% {
-      opacity: 0.96;
-      transform: translateX(0) skewX(-8deg) scale(1);
-      filter: blur(0);
-    }
-  }
-
-  @keyframes sc-arrow-left {
-    0%, 100% { transform: translateX(0); opacity: 1; }
-    50% { transform: translateX(-5px); opacity: 0.4; }
-  }
-
-  @keyframes sc-arrow-right {
-    0%, 100% { transform: translateX(0); opacity: 1; }
-    50% { transform: translateX(5px); opacity: 0.4; }
-  }
-
-  .sc-main-portrait-shell {
-    position: absolute;
-    top: 0;
-    right: -3vw;
-    z-index: 13;
-    pointer-events: none;
-    width: 43vw;
-    height: 100vh;
-    overflow: hidden;
-    opacity: 0;
-    transform: translateX(24px) skewX(-8deg) scale(0.98);
-    transition: opacity 0.35s ease, transform 0.35s ease;
-  }
-  .sc-main-portrait-shell.mounted {
-    opacity: 0.96;
-    transform: translateX(0) skewX(-8deg) scale(1);
-    animation: sc-portrait-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .sc-reveal-panel {
-    position: absolute;
-    top: 44vh;
-    left: -6vw;
-    width: 88vw;
-    height: 60vh;
-    z-index: 12;
-    pointer-events: none;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,246,252,0.98) 100%);
-    clip-path: polygon(0 0, 100% 0, calc(100% - 88px) 100%, 0 100%);
-    box-shadow:
-      0 0 0 2px rgba(255,255,255,0.18),
-      18px 0 0 rgba(215, 13, 44, 0.82),
-      28px 0 0 rgba(255,255,255,0.26);
-    opacity: 0;
-    transform: translateX(-40px) rotate(-20deg);
-    transform-origin: left bottom;
-    transition: opacity 0.3s ease, transform 0.35s ease;
-  }
-  .sc-reveal-panel.mounted {
-    opacity: 0.92;
-    transform: translateX(0) rotate(-20deg);
-    animation: sc-reveal-bar-in 0.46s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .sc-reveal-panel::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 8px;
-    background: linear-gradient(180deg, #e03d31 0%, #eb3333 100%);
-    clip-path: inherit;
-  }
-  .sc-reveal-upper-bar {
-    position: absolute;
-    top: 10%;
-    left: 0%;
-    width: 100%;
-    height: 40%;
-    background: rgba(0, 0, 0, 0.92);
-    clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: #fff;
-    text-align: center;
-  }
-  .sc-reveal-upper-line {
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 300;
-    font-size: 20px;
-    letter-spacing: 0.5px;
-    line-height: 1.15;
-  }
-  .sc-reveal-lower-bar {
-    position: absolute;
-    top: 58%;
-    right: 0;
-    width: 48%;
-    min-height: 20%;
-    max-height: 34%;
-    background: rgba(0, 0, 0, 0.92);
-    clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
-    color: #fff;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 300;
-    font-size: 22px;
-    line-height: 1.18;
-    letter-spacing: 0.4px;
-    text-transform: lowercase;
-    white-space: normal;
-    overflow-y: auto;
-    padding: 10px 18px 10px 22px;
-  }
-
-  @keyframes sc-right-nav-pop {
-    0%   { opacity: 0; transform: scale(0.55) translateY(-10px); }
-    65%  { opacity: 1; transform: scale(1.1) translateY(2px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); }
-  }
-  .sc-right-nav {
-    position: absolute;
-    top: 10vh;
-    left: 6vw;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    pointer-events: none;
-    z-index: 14;
-    transform: translateX(-40px) rotate(-20deg);
-    transform-origin: left bottom;
-    animation: sc-right-nav-pop 0.38s cubic-bezier(0.22,1,0.36,1) both;
-  }
-  .sc-right-nav .sc-nav-btn {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 100px;
-    letter-spacing: 3px;
-    line-height: 1;
-    user-select: none;
-    color: #fff;
-    -webkit-text-stroke: 2px #000;
-    paint-order: stroke fill;
-    background: none;
-    border: none;
-    padding: 0 6px;
-  }
-  .sc-right-nav .sc-nav-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    background: #111;
-    margin: 0 10px;
-    flex-shrink: 0;
-  }
-  .sc-right-nav .sc-nav-arrow {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px;
-    color: #c4001a;
-    display: inline-block;
-    user-select: none;
-  }
-  .sc-right-nav .sc-nav-arrow.left  { animation: sc-arrow-left  0.8s ease-in-out infinite; }
-  .sc-right-nav .sc-nav-arrow.right { animation: sc-arrow-right 0.8s ease-in-out infinite; }
-
-  .sc-main-portrait {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top right;
-    transform: skewX(8deg) scale(1.08);
-    transform-origin: top right;
-  }
-
-  /* ── Each bar ── */
-  .sc-bar {
-    position: relative;
-    width: 45vw;
-    height: 64px;
-    transition: height 0.3s cubic-bezier(0.22,1,0.36,1);
-    background: #111;
-    cursor: pointer;
-    pointer-events: all;
-    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
-    box-shadow: 0 6px 24px rgba(0,0,0,0.65);
-    z-index: 1;
-  }
-
-  /* wrapper holds both the red underlay and the bar */
-  .sc-bar-outer {
-    position: relative;
-    flex-shrink: 0;
-    transform: translateX(-100%);
-    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .sc-bar-outer.active .sc-bar     { height: 90px; }
-  .sc-bar-outer.active .sc-bar-red { height: 90px; }
-  .sc-bar-outer.mounted { transform: translateX(0); }
-  .sc-bar-outer:nth-child(1) { transition-delay: 0ms; }
-  .sc-bar-outer:nth-child(2) { transition-delay: 80ms; }
-  .sc-bar-outer:nth-child(3) { transition-delay: 160ms; }
-
-  /* red underlay — peeks out below the bar when active */
-  .sc-bar-red {
-    position: absolute;
-    top: 0; left: 0;
-    width: 45vw;
-    height: 64px;
-    background: #c4001a;
-    clip-path: polygon(50% 0, 100% 0, 100% 100%, calc(50% - 10px) 100%);
-    transform: translateY(-7px);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    z-index: 0;
-    pointer-events: none;
-  }
-  .sc-bar-outer.active .sc-bar-red { opacity: 1; }
-
-  /* white fill — skewed parallelogram on the right 25% */
-  .sc-bar-fill {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    background: #ffffff;
-    clip-path: polygon(100% 0, 100% 0, calc(100% - 32px) 100%, calc(100% - 32px) 100%);
-    transition: clip-path 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-    z-index: 0;
-  }
-  .sc-bar-outer.active .sc-bar-fill {
-    clip-path: polygon(22% 0, 100% 0, calc(100% - 14px) 100%, calc(22% + 138px) 100%);
-  }
-
-  /* shade on the left edge of the white fill */
-  .sc-bar-shade {
-    position: absolute;
-    top: 0; bottom: 0;
-    left: 73%;
-    width: 6%;
-    background: linear-gradient(90deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%);
-    z-index: 1;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.35s ease;
-  }
-  .sc-bar-outer.active .sc-bar-shade { opacity: 1; }
-
-  /* bottom shadow line under each bar */
-  .sc-bar::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 6px;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%);
-    z-index: 10;
-    pointer-events: none;
-  }
-
-  /* content layout inside each bar */
-  .sc-bar-content {
-    position: relative;
-    z-index: 2;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px 0 20px;
-  }
-
-  /* left: role label */
-  .sc-role {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    font-family: 'Anton', sans-serif;
-    font-size: 50px;
-    letter-spacing: -2px;
-    color: #ffffff;
-    transform: rotate(-30deg);
-    user-select: none;
-    line-height: 1;
-    padding: 0 16px 0 8px;
-  }
-
-  /* left: icon + name centered in remaining space */
-  .sc-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding-left: 78px;
-  }
-  .sc-main-top {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .sc-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 28px;
-    letter-spacing: 4px;
-    line-height: 1;
-    color: rgba(255,255,255,0.85);
-    transition: color 0.2s ease;
-    user-select: none;
-  }
-  .sc-bar-outer.active .sc-label { color: #111111; }
-
-  /* character portrait */
-  .sc-char {
-    position: absolute;
-    top: 0;
-    left: 110px;
-    height: 100%;
-    width: auto;
-    max-width: 160px;
-    object-fit: cover;
-    object-position: top;
-    pointer-events: none;
-    z-index: 3;
-    clip-path: polygon(20px 0%, 100% 0%, calc(100% - 20px) 100%, 0% 100%);
-  }
-
-  /* footer hints */
-  .sc-footer {
-    position: fixed;
-    bottom: 20px; right: 28px;
-    display: flex; flex-direction: column;
-    align-items: flex-end; gap: 5px;
-    font-family: 'Bebas Neue', sans-serif;
-    z-index: 14;
-    opacity: 0;
-    transition: opacity 0.4s ease 0.6s;
-  }
-  .sc-footer.mounted { opacity: 1; }
-  .sc-footer-row {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 13px; letter-spacing: 2px;
-    color: rgba(255,255,255,0.22);
-  }
-  .sc-footer-key {
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 3px;
-    padding: 1px 6px; font-size: 11px;
-  }
-
-  .sc-mobile-controls {
-    display: none;
-  }
-
-  .sc-mobile-btn {
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    font-family: 'Bebas Neue', sans-serif;
-    letter-spacing: 1.2px;
-    font-size: 13px;
-    padding: 7px 12px;
-    border-radius: 8px;
-    min-width: 86px;
-  }
-
-  @media (max-width: 768px) {
-    .sc-main-portrait-shell {
-      top: 8vh;
-      right: -9vw;
-      width: 46vw;
-      height: 44vh;
-      z-index: 13;
-    }
-
-    .sc-main-portrait {
-      transform: none;
-      object-position: center top;
-    }
-
-    .sc-reveal-panel {
-      top: 44vh !important;
-      left: 4vw !important;
-      right: 6vw !important;
-      width: auto !important;
-      height: 50vh !important;
-      z-index: 14;
-      transform: translateX(0) rotate(0deg) !important;
-      clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
-      box-shadow:
-        0 0 0 2px rgba(255,255,255,0.24),
-        10px 0 0 rgba(215, 13, 44, 0.9),
-        16px 0 0 rgba(255,255,255,0.24);
-    }
-
-    .sc-reveal-panel.mounted {
-      transform: translateX(0) rotate(0deg) !important;
-    }
-
-    .sc-reveal-panel::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 18px;
-      height: 100%;
-      background: linear-gradient(180deg, rgba(224,61,49,0.95) 0%, rgba(168,22,43,0.92) 100%);
-      clip-path: polygon(20% 0, 100% 0, 100% 100%, 0 100%);
-      opacity: 0.95;
-      pointer-events: none;
-    }
-
-    .sc-reveal-upper-bar {
-      top: 10%;
-      height: 46%;
-      width: 96%;
-      left: 2%;
-    }
-
-    .sc-reveal-upper-line {
-      font-size: 14px;
-      line-height: 1.1;
-      padding: 0 10px;
-    }
-
-    .sc-reveal-lower-bar {
-      top: 62%;
-      width: 88%;
-      bottom: 8%;
-      height: auto;
-      max-height: none;
-      font-size: 15px;
-      line-height: 1.2;
-      padding: 8px 12px 8px 12px;
-    }
-
-    .sc-right-nav {
-      top: 2vh;
-      left: 4vw;
-      transform: translateX(0) rotate(-12deg);
-    }
-
-    .sc-mobile-controls {
-      position: fixed;
-      left: 8px;
-      right: 8px;
-      bottom: max(8px, env(safe-area-inset-bottom));
-      z-index: 18;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      pointer-events: all;
-    }
-
-    .sc-footer {
-      display: none;
-    }
-  }
-
-  @media (min-width: 769px) and (max-width: 1200px) {
-    .sc-main-portrait-shell {
-      right: -6vw;
-      width: 44vw;
-      height: 92vh;
-    }
-
-    .sc-reveal-panel {
-      top: 46vh;
-      left: -2vw;
-      width: 78vw;
-      height: 52vh;
-      transform: translateX(0) rotate(-14deg);
-    }
-
-    .sc-reveal-panel.mounted {
-      transform: translateX(0) rotate(-14deg);
-    }
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.8);
   }
 </style>

@@ -4,9 +4,13 @@
 
   let { onClose } = $props();
 
-  // ESP32-S3 Sense Camera Node URL (Overwatch Node - Corner 4)
-  // Replace with the actual IP address of your XIAO ESP32-S3 Sense on the local network
-  const esp32s3Url = "http://192.168.1.100/capture";
+  // ESP32-S3 Sense Camera Node URL — reads VITE_CAMERA_STREAM_URL from .env.local
+  // The /capture endpoint is derived automatically from the /stream URL.
+  // Set VITE_CAMERA_STREAM_URL to your ngrok tunnel (e.g. https://xxxx.ngrok-free.app/stream)
+  const esp32s3Url = (import.meta.env.VITE_CAMERA_STREAM_URL as string | undefined)
+    ?.replace('/stream', '/capture')
+    ?? 'http://soltra-camera.local/capture';
+
   
   let currentImageUrl = $state(esp32s3Url);
   let intervalId: any;

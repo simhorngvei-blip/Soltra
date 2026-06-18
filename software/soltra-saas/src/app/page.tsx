@@ -3,6 +3,7 @@ import { SpecGrid } from '@/components/landing/SpecGrid'
 import { PurchaseCard } from '@/components/landing/PurchaseCard'
 import { SplineShowcase } from '@/components/sections/SplineShowcase'
 import { AnimatedNav } from '@/components/ui/animated-nav'
+import { PrototypeShowcase } from '@/components/sections/PrototypeShowcase'
 
 export default function Home() {
   return (
@@ -38,6 +39,10 @@ export default function Home() {
         <SpecGrid />
       </div>
 
+      <div id="prototypes">
+        <PrototypeShowcase />
+      </div>
+
       <div id="purchase">
         <PurchaseCard />
       </div>
@@ -47,9 +52,9 @@ export default function Home() {
           <div>
             <h2 className="text-[6vw] text-impact mb-8 italic">SOLTRA<span className="text-primary">.GRID</span></h2>
             <p className="text-zinc-600 font-mono text-xs uppercase tracking-widest leading-relaxed max-w-sm">
-              The next generation of cognitive energy infrastructure. 
+              The next generation of AI-driven solar tracking infrastructure. 
               Built for the transition to a decentralized, 
-              resilient planetary grid.
+              resilient clean energy grid.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-12">

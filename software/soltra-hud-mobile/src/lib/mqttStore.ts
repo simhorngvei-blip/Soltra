@@ -4,13 +4,19 @@ import mqtt from 'mqtt';
 export const mqttStatus = writable('DISCONNECTED');
 export const logs = writable<{ topic: string, payload: string, timestamp: string }[]>([]);
 export const telemetry = writable({
-  wind_speed: 0,
-  solar_yield: 0,
-  panel_angle: 0,
-  status: '--',
-  wind_alert: false,
-  node_online: false,
-  light_level: '--'
+  wind_speed_ms:   0,
+  irradiance_wm2:  0,
+  pan_angle_deg:   0,
+  tilt_angle_deg:  0,
+  battery_pct:     0,
+  lux:             0,
+  uv_index:        0,
+  humidity_pct:    0,
+  power_watts:     0,
+  panel_volts:     0,
+  wind_alert:      false,
+  status:          '--',
+  node_mac:        '',
 });
 
 let client: mqtt.MqttClient | null = null;

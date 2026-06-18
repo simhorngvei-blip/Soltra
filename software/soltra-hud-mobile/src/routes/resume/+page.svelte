@@ -180,9 +180,9 @@
 
   .resume-stack {
     position: absolute;
-    top: 9vh;
-    left: 2.8vw;
-    width: min(47vw, 720px);
+    top: 120px;
+    left: 120px;
+    width: 800px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -345,10 +345,10 @@
 
   .resume-detail-panel {
     position: absolute;
-    top: 9.5vh;
-    right: 4.5vw;
-    width: min(39vw, 620px);
-    min-height: 74vh;
+    top: 120px;
+    right: 120px;
+    width: 800px;
+    min-height: 800px;
     z-index: 12;
     padding: 22px 24px 24px 24px;
     background: linear-gradient(180deg, rgba(15, 28, 105, 0.96) 0%, rgba(8, 16, 68, 0.97) 100%);

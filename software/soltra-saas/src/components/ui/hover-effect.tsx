@@ -11,7 +11,7 @@ export const HoverEffect = ({
   className?: string;
   children: React.ReactNode;
 }) => {
-  let [hovered, setHovered] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { User, MapPin, Server, CheckCircle, Loader2, Trash2, AlertTriangle } from 'lucide-react'
 import { useToast, ToastContainer } from '@/components/ui/toast'
 import type { SoltraUser, Site, Node } from '@/lib/types'
@@ -17,12 +16,12 @@ const TIMEZONES = [
 const inputClass = 'w-full bg-zinc-900 border border-zinc-700 p-2.5 text-sm font-mono text-zinc-200 placeholder:text-zinc-700 focus:outline-none focus:border-emerald-500/50 transition-all rounded-lg'
 
 function Section({ title, icon: Icon, children }: {
-  title: string; icon: any; children: React.ReactNode
+  title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode
 }) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
       <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
-        <Icon size={14} className="text-emerald-400" />
+        <Icon className="w-[14px] h-[14px] text-emerald-400" />
         <h2 className="text-sm font-semibold text-zinc-200">{title}</h2>
       </div>
       <div className="p-5">{children}</div>

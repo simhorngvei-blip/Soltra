@@ -34,10 +34,9 @@ graph TB
 
     subgraph "🖥️ SOFTWARE"
         SAAS["soltra-saas<br/>Next.js 16 + Tailwind 4"]
-        HUDW["soltra-hud (Desktop)<br/>SvelteKit + Vite"]
         HUDM["soltra-hud-mobile<br/>SvelteKit + Capacitor"]
         TTS["soltra-tts<br/>Python + Kokoro ONNX"]
-        CV["soltra-cv<br/>Python + OpenCV"]
+        CV["soltra-cv<br/>Python + OpenCV Sun Tracker"]
     end
 
     SN1 -- "ESP-NOW (Polled)" --> HUB
@@ -50,7 +49,6 @@ graph TB
     HUB -- "MQTT TLS 8883<br/>helios/telemetry" --> HMQ
     HUB -- "HTTP POST<br/>/api/telemetry/ingest" --> VCL
 
-    HMQ -- "WSS 8884" --> HUDW
     HMQ -- "WSS 8884" --> HUDM
 
     VCL -- "API Routes" --> SAAS
@@ -59,13 +57,11 @@ graph TB
 
     SB -- "Realtime WS" --> SAAS
     
-    HUDW -- "Avatar + TTS Request" --> NGROK
     HUDM -- "Avatar + TTS Request" --> NGROK
     NGROK -- "Route to Localhost" --> TTS
     
-    CV -. "Video Stream<br/>Standalone (Pending Integration)" .-> CAM
-
-    style CV stroke-dasharray: 5 5,stroke:#ff2a2a
+    CAM -- "HTTP Video Stream" --> CV
+    CV -- "MQTT Pub<br/>ai_override" --> HMQ
 ```
 
 ---

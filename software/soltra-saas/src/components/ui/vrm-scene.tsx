@@ -66,13 +66,14 @@ function Model({ url }: { url: string }) {
     return () => {
       isMounted = false
       if (loadedVrm) {
-        loadedVrm.scene.traverse((child: any) => {
-          if (child.isMesh) {
-            child.geometry?.dispose()
-            if (Array.isArray(child.material)) {
-              child.material.forEach((m: any) => m.dispose())
-            } else {
-              child.material?.dispose()
+        loadedVrm.scene.traverse((child: THREE.Object3D) => {
+          const mesh = child as THREE.Mesh
+          if (mesh.isMesh) {
+            mesh.geometry?.dispose()
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((m: THREE.Material) => m.dispose())
+            } else if (mesh.material) {
+              mesh.material.dispose()
             }
           }
         })

@@ -194,13 +194,13 @@
     align-items: flex-start;
     justify-content: center;
     gap: 6px;
-    padding-left: 0;
+    padding-left: 120px;
   }
 
   /* ── Each bar ── */
   .sc-bar {
     position: relative;
-    width: 45vw;
+    width: 800px;
     height: 64px;
     transition: height 0.3s cubic-bezier(0.22,1,0.36,1);
     background: #111;
@@ -229,7 +229,7 @@
   .sc-bar-red {
     position: absolute;
     top: 0; left: 0;
-    width: 45vw;
+    width: 800px;
     height: 64px;
     background: #c4001a;
     clip-path: polygon(50% 0, 100% 0, 100% 100%, calc(50% - 10px) 100%);
@@ -500,8 +500,8 @@
   .sc-info-panel {
     position: fixed;
     top: 132px;
-    right: 0;
-    left: 65%;
+    right: 80px;
+    left: 55%;
     bottom: 84px;
     z-index: 50;
     display: flex;

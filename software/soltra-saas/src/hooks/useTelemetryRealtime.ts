@@ -34,13 +34,15 @@ export function useTelemetryRealtime(nodeId: string | null): UseTelemetryRealtim
 
   useEffect(() => {
     if (!nodeId) {
-      setIsLoading(false)
+      queueMicrotask(() => setIsLoading(false));
       return
     }
 
     bootstrapped.current = false
-    setIsLoading(true)
-    setError(null)
+    queueMicrotask(() => {
+      setIsLoading(true)
+      setError(null)
+    });
 
     const supabase = createClient()
 

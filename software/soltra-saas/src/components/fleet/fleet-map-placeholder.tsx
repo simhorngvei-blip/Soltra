@@ -1,111 +1,21 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
 import type { Site, Node } from '@/lib/types'
 import { MapPin } from 'lucide-react'
+import { Map, MapMarker, MarkerContent, MarkerPopup, MapControls } from '@/components/ui/mapcn-map-arc'
 
 interface FleetMapProps {
   sites: Site[]
   nodes: (Node & { siteName: string })[]
 }
 
-// ─── Fleet Map ────────────────────────────────────────────────────────────────
 export function FleetMap({ sites, nodes }: FleetMapProps) {
-  const mapRef     = useRef<HTMLDivElement>(null)
-  const leafletRef = useRef<any>(null)
-
   const sitesWithCoords    = sites.filter((s) => s.lat != null && s.lng != null)
   const sitesWithoutCoords = sites.filter((s) => s.lat == null || s.lng == null)
 
-  useEffect(() => {
-    if (!mapRef.current || sitesWithCoords.length === 0) return
-
-    import('leaflet').then((L) => {
-      if (leafletRef.current) {
-        leafletRef.current.remove()
-      }
-
-      delete (L.Icon.Default.prototype as any)._getIconUrl
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      })
-
-      const firstSite = sitesWithCoords[0]
-      const map = L.map(mapRef.current!, {
-        center:          [firstSite.lat!, firstSite.lng!],
-        zoom:            12,
-        zoomControl:     true,
-        scrollWheelZoom: true,
-      })
-
-      leafletRef.current = map
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains:  'abcd',
-        maxZoom:     20,
-      }).addTo(map)
-
-      for (const site of sitesWithCoords) {
-        const nodeCount  = nodes.filter((n) => n.site_id === site.id).length
-        const active     = nodes.filter((n) => n.site_id === site.id && n.status === 'active').length
-        const hasAlert   = nodes.some((n) => n.site_id === site.id && n.status !== 'active' && n.status !== 'offline')
-
-        // Custom pulsing marker based on status
-        const color  = active > 0 ? '#10b981' : '#52525b'
-        const pulse  = active > 0 ? 'animation: soltra-ping 1.5s cubic-bezier(0,0,0.2,1) infinite;' : ''
-        const ring   = hasAlert   ? 'box-shadow: 0 0 0 4px rgba(239,68,68,0.4);' : ''
-
-        const icon = L.divIcon({
-          html: `
-            <div style="position:relative;width:16px;height:16px;">
-              <div style="
-                position:absolute;inset:0;border-radius:50%;
-                background:${color};opacity:0.3;${pulse}
-              "></div>
-              <div style="
-                position:absolute;inset:3px;border-radius:50%;
-                background:${color};${ring}
-              "></div>
-            </div>
-            <style>
-              @keyframes soltra-ping {
-                75%,100% { transform: scale(2.5); opacity: 0; }
-              }
-            </style>
-          `,
-          className: '',
-          iconSize:  [16, 16],
-          iconAnchor:[8, 8],
-        })
-
-        const marker = L.marker([site.lat!, site.lng!], { icon }).addTo(map)
-        marker.bindPopup(`
-          <div style="font-family: monospace; font-size: 12px; color: #111;">
-            <strong style="font-size: 14px;">${site.name}</strong><br/>
-            <span style="color: #555;">${site.timezone}</span><br/>
-            <span style="color: #059669;">● ${active} active</span> / ${nodeCount} total
-          </div>
-        `)
-      }
-
-      if (sitesWithCoords.length > 1) {
-        const group = L.featureGroup(
-          sitesWithCoords.map((s) => L.marker([s.lat!, s.lng!]))
-        )
-        map.fitBounds(group.getBounds().pad(0.2))
-      }
-    })
-
-    return () => {
-      if (leafletRef.current) {
-        leafletRef.current.remove()
-        leafletRef.current = null
-      }
-    }
-  }, [sitesWithCoords.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const initialViewState = sitesWithCoords.length > 0 
+    ? { center: [sitesWithCoords[0].lng!, sitesWithCoords[0].lat!] as [number, number], zoom: 12 }
+    : { center: [-98.5795, 39.8283] as [number, number], zoom: 3 };
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
@@ -125,13 +35,46 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
           </p>
         </div>
       ) : (
-        <>
-          <div ref={mapRef} className="h-72 w-full" />
-          <style>{`
-            .leaflet-container { background: #09090b; }
-            .leaflet-popup-content-wrapper { border-radius: 8px; }
-          `}</style>
-        </>
+        <div className="h-[400px] w-full relative">
+          <Map viewport={initialViewState}>
+            {sitesWithCoords.map(site => {
+              const nodeCount = nodes.filter(n => n.site_id === site.id).length
+              const active = nodes.filter(n => n.site_id === site.id && n.status === 'active').length
+              const hasAlert = nodes.some(n => n.site_id === site.id && n.status !== 'active' && n.status !== 'offline')
+
+              const colorClass = active > 0 ? 'bg-emerald-500' : 'bg-zinc-500'
+              const ringClass = hasAlert ? 'ring-[3px] ring-red-500/50 ring-offset-2 ring-offset-transparent' : ''
+              const pulseClass = active > 0 ? 'animate-ping' : ''
+
+              return (
+                <MapMarker
+                  key={site.id}
+                  longitude={site.lng!}
+                  latitude={site.lat!}
+                >
+                  <MarkerContent>
+                    <div className="relative w-4 h-4 cursor-pointer">
+                      {/* Pulse */}
+                      {active > 0 && (
+                        <div className={`absolute inset-0 rounded-full opacity-30 ${colorClass} ${pulseClass} [animation-duration:2s]`} />
+                      )}
+                      {/* Center */}
+                      <div className={`absolute inset-[3px] rounded-full ${colorClass} ${ringClass}`} />
+                    </div>
+                  </MarkerContent>
+                  <MarkerPopup offset={16} closeButton={false} className="bg-zinc-900 border-zinc-800 shadow-xl">
+                    <div className="font-mono text-xs text-zinc-200 min-w-[140px]">
+                      <strong className="text-sm font-sans block mb-1">{site.name}</strong>
+                      <span className="text-zinc-500 block mb-2">{site.timezone}</span>
+                      <span className="text-emerald-400">● {active} active</span> <span className="text-zinc-500">/ {nodeCount} total</span>
+                    </div>
+                  </MarkerPopup>
+                </MapMarker>
+              )
+            })}
+            <MapControls position="bottom-right" showZoom showLocate />
+          </Map>
+        </div>
       )}
 
       {sitesWithoutCoords.length > 0 && (

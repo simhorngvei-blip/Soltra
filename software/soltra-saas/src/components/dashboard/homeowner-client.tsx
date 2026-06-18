@@ -202,7 +202,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
     if (wasConnected && !isConnected && !isLoading) {
       toast('Node connection lost. Check that the device is powered on.', 'error')
     }
-    if (isConnected) setWasConnected(true)
+    if (isConnected) queueMicrotask(() => setWasConnected(true))
   }, [isConnected, isLoading, wasConnected]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Command publisher ───────────────────────────────────────────────────────

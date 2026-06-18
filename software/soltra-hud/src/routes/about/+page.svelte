@@ -9,9 +9,9 @@
   let revealContent = $derived([
     {
       upper: [
-        `WIND SPEED: ${$telemetry.wind_speed ? $telemetry.wind_speed.toFixed(1) : '--'} m/s`,
-        `SOLAR YIELD: ${$telemetry.solar_yield ? $telemetry.solar_yield.toFixed(1) : '--'} W/m²`,
-        `PANEL AZIMUTH: ${$telemetry.panel_angle ? $telemetry.panel_angle.toFixed(1) : '--'}°`
+        `WIND SPEED: ${$telemetry.wind_speed_ms != null ? $telemetry.wind_speed_ms.toFixed(1) : '--'} m/s`,
+        `SOLAR YIELD: ${$telemetry.irradiance_wm2 != null ? $telemetry.irradiance_wm2.toFixed(1) : '--'} W/m²`,
+        `PANEL AZIMUTH: ${$telemetry.pan_angle_deg != null ? $telemetry.pan_angle_deg.toFixed(1) : '--'}°`
       ],
       lower: "Helios Telemetry Matrix",
     },
@@ -19,9 +19,9 @@
       upper: [
         `TRACKER STATUS: ${$telemetry.status.toUpperCase()}`,
         `WIND ALERT: ${$telemetry.wind_alert ? 'ALERT!' : 'NOMINAL'}`,
-        `SENSOR NODE: ${$telemetry.node_online ? 'ONLINE' : 'OFFLINE'}`,
+        `SENSOR NODE: ${$telemetry.status !== '--' ? 'ONLINE' : 'OFFLINE'}`,
       ],
-      lower: `Link: ${$mqttStatus} | Light: ${$telemetry.light_level}`,
+      lower: `Link: ${$mqttStatus} | LUX: ${$telemetry.lux ?? '--'}`,
     },
     {
       upper: [

@@ -1,9 +1,7 @@
 <script lang="ts">
   import Option from "$lib/components/Option.svelte";
   import { animate } from "animejs";
-  import VoiceCloningModal from "$lib/components/VoiceCloningModal.svelte";
-  import DailyReportModal from "$lib/components/DailyReportModal.svelte";
-  import LiveCameraModal from "$lib/components/LiveCameraModal.svelte";
+
 
   import Control from "$lib/components/Control.svelte";
   import SettingsOption from "$lib/components/SettingsOption.svelte";
@@ -42,9 +40,7 @@
 
   let backgroundVideo: HTMLVideoElement;
   let selectedIndex = $state(0);
-  let showVoiceCloning = $state(false);
-  let showDailyReport = $state(false);
-  let showLiveCamera = $state(false);
+
   let currentOptionElement = $state<HTMLButtonElement>();
   let settingsOptionElement = $state<HTMLDivElement>();
   let currentSettingIndex = $state(0);
@@ -85,11 +81,11 @@
     } else if (name === "SETTINGS") {
       goto("/settings");
     } else if (name === "VOICE CLONING") {
-      showVoiceCloning = true;
+      goto("/voice-cloning");
     } else if (name === "DAILY REPORT") {
-      showDailyReport = true;
+      goto("/daily-report");
     } else if (name === "LIVE CAMERA") {
-      showLiveCamera = true;
+      goto("/live-camera");
     } else if (name === "LOGOUT") {
       window.location.href = "/";
     }
@@ -144,7 +140,7 @@
 
   {#if !appState.isStarted}
     <div class="fixed bg-bg/90 size-full flex justify-center items-center z-20" transition:fade>
-      <div class="flex flex-col gap-20 justify-center items-center scale-[1.4]">
+      <div class="flex flex-col gap-12 md:gap-20 justify-center items-center scale-[0.65] sm:scale-75 md:scale-100 lg:scale-[1.4]">
         <div class="rotate-3 space-y-2">
         <h1 class="bg-fg text-bg px-6 py-4 rounded-md text-6xl tracking-[-0.08em] text-center uppercase">
           SOLTRA HELIOS<br>
@@ -196,7 +192,7 @@
   ></video>
 
   <!-- options -->
-  <div class="3xl:left-[80rem] left-[65rem] flex flex-col items-start justify-center h-full relative -space-y-32">
+  <div class="3xl:left-[80rem] left-[65rem] flex flex-col items-start justify-center h-full relative top-1 -space-y-32">
     {#each options as option, i}
       <Option
         index={i}
@@ -208,17 +204,7 @@
     {/each}
   </div>
 
-  {#if showVoiceCloning}
-    <VoiceCloningModal onClose={() => showVoiceCloning = false} />
-  {/if}
 
-  {#if showDailyReport}
-    <DailyReportModal onClose={() => showDailyReport = false} />
-  {/if}
-
-  {#if showLiveCamera}
-    <LiveCameraModal onClose={() => showLiveCamera = false} />
-  {/if}
 
   <!-- controls & telemetry -->
   <div class="absolute bottom-0 right-0 font-new-rodin flex flex-col items-start z-10 w-full" style="max-width: 400px; padding: 20px;">
@@ -226,14 +212,7 @@
       {options[selectedIndex].description}
     </p>
 
-    <div class="bg-black/50 border border-[#00d9ff]/30 p-4 w-full mb-8 mr-8 text-white text-sm" style="font-family: monospace;">
-      <div class="mb-2 text-[#00d9ff]">&gt; LINK {$mqttStatus}</div>
-      <div class="flex justify-between"><span>TRUE LUX:</span> <span>{$telemetry.lux != null ? $telemetry.lux + ' lx' : '-- lx'}</span></div>
-      <div class="flex justify-between"><span>IRRADIANCE:</span> <span>{$telemetry.irradiance_wm2 != null ? $telemetry.irradiance_wm2.toFixed(1) + ' W/m²' : '-- W/m²'}</span></div>
-      <div class="flex justify-between"><span>BATTERY:</span> <span>{$telemetry.battery_pct != null ? $telemetry.battery_pct + '%' : '--%'}</span></div>
-      <div class="flex justify-between"><span>PANELS:</span> <span>{$telemetry.pan_angle_deg != null ? $telemetry.pan_angle_deg.toFixed(1) + '°' : 'OPTIMIZED'}</span></div>
-      <div class="flex justify-between"><span>WIND:</span> <span>{$telemetry.wind_speed_ms != null ? $telemetry.wind_speed_ms.toFixed(1) + ' m/s' : '-- m/s'}</span></div>
-    </div>
+
   </div>
 
   <!-- side text -->

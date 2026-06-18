@@ -14,6 +14,8 @@ static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 
 httpd_handle_t stream_httpd = NULL;
 
+extern bool stream_active;
+
 // ── /capture handler ─────────────────────────────────────────────────────────
 // Returns a single JPEG still frame as image/jpeg.
 // Used by: soltra-hud-mobile LiveCameraModal (snapshot mode + REQUEST SNAPSHOT button).
@@ -54,12 +56,14 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   char * part_buf[64];
 
   // 1. WAKE UP CAMERA
+  stream_active = true;
   turnCameraOn();
   vTaskDelay(pdMS_TO_TICKS(500)); // Give the sensor half a second to stabilize colors
 
   res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
   if (res != ESP_OK) {
     turnCameraOff();
+    stream_active = false;
     return res;
   }
 
@@ -88,13 +92,14 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     
     esp_camera_fb_return(fb);
     
-    if (res != ESP_OK) {
-      break; // Client disconnected or network error
+    if (res != ESP_OK || !stream_active) {
+      break; // Client disconnected or MQTT requested stop
     }
   }
 
   // 3. SHUT DOWN CAMERA
   turnCameraOff();
+  stream_active = false;
   return res;
 }
 

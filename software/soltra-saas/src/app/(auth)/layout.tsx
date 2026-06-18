@@ -1,4 +1,5 @@
-﻿import type { Metadata } from 'next'
+import type { Metadata } from 'next'
+import NeuralBackground from '@/components/ui/flow-field-background'
 
 export const metadata: Metadata = {
   title: 'Authentication | SOLTRA',
@@ -6,8 +7,10 @@ export const metadata: Metadata = {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md relative">
+    <div className="min-h-screen flex items-center justify-center bg-background px-6 relative overflow-hidden">
+      <NeuralBackground className="absolute inset-0 z-0" color="#10b981" />
+      
+      <div className="w-full max-w-md relative z-10 pointer-events-auto">
         {/* Decorative elements */}
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />

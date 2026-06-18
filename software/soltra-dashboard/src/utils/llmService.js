@@ -3,7 +3,7 @@
  * Connects to a local Ollama instance.
  */
 
-const OLLAMA_URL = 'http://localhost:11434/api/chat';
+const OLLAMA_URL = (import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434') + '/api/chat';
 const OLLAMA_MODEL = 'qwen2.5:0.5b'; // Switched to smaller model to fit RAM
 
 const SYSTEM_PROMPT = `

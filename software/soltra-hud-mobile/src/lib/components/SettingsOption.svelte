@@ -14,13 +14,13 @@
   onclick={() => (value = !value)}
   onmouseenter={onSelect}
   onfocus={onSelect}
-  class={cn("flex gap-8 items-center justify-between w-[32rem] py-2 px-6 rounded-md font-skip font-bold text-2xl cursor-pointer", {
+  class={cn("flex gap-8 items-center justify-between w-[32rem] h-20 px-6 rounded-md font-skip font-bold text-4xl cursor-pointer", {
     "bg-fg text-bg text-muted": isSelected,
     "text-button-3": !isSelected
   })}
 >
   <span>{@render children()}</span>
-  <div class="flex justify-center items-center rounded-full h-8 w-24 bg-black text-fg font-new-rodin text-xl font-normal">
+  <div class="flex justify-center items-center rounded-full h-10 w-28 bg-black text-fg font-new-rodin text-2xl font-normal">
     {value ? "On" : "Off"}
   </div>
 </button>

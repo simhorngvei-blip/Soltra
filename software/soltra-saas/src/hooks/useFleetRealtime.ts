@@ -27,9 +27,11 @@ export function useFleetRealtime(nodeIds: string[]): UseFleetRealtimeResult {
   const [nodeData, setNodeData]       = useState<FleetNodeData>({})
   const [isConnected, setIsConnected] = useState(false)
 
+  const nodeIdsStr = nodeIds.join(',')
   useEffect(() => {
-    if (nodeIds.length === 0) return
+    if (nodeIdsStr.length === 0) return
 
+    const ids = nodeIdsStr.split(',')
     const supabase = createClient()
 
     // ── Bootstrap: fetch the latest record for each node ───────────────────
@@ -37,7 +39,7 @@ export function useFleetRealtime(nodeIds: string[]): UseFleetRealtimeResult {
       const { data } = await supabase
         .from('telemetry')
         .select('*')
-        .in('node_id', nodeIds)
+        .in('node_id', ids)
         .order('recorded_at', { ascending: false })
 
       if (data) {
@@ -67,7 +69,7 @@ export function useFleetRealtime(nodeIds: string[]): UseFleetRealtimeResult {
         (payload) => {
           const record = payload.new as TelemetryRecord
           // Only update if this node is in our tracked set
-          if (nodeIds.includes(record.node_id)) {
+          if (ids.includes(record.node_id)) {
             setNodeData((prev) => ({
               ...prev,
               [record.node_id]: adaptTelemetryRecord(record),
@@ -83,7 +85,7 @@ export function useFleetRealtime(nodeIds: string[]): UseFleetRealtimeResult {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [nodeIds.join(',')])   // re-subscribe only when node list changes
+  }, [nodeIdsStr])   // re-subscribe only when node list changes
 
   return { nodeData, isConnected }
 }

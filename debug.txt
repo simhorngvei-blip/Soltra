@@ -1,0 +1,51 @@
+<USER_REQUEST>
+FInd a place to use this 
+You are given a task to integrate an existing React component in the codebase
+
+The codebase should support:
+- shadcn project structure  
+- Tailwind CSS
+- Typescript
+
+If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
+
+Determine the default path for components and styles. 
+If default path for components is not /components/ui, provide instructions on why it's important to create this folder
+Copy-paste this component to /components/ui folder:
+```tsx
+mapcn-map-arc.tsx
+"use client";
+
+import MapLibreGL, { type PopupOptions, type MarkerOptions } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
+
+function cn(...inputs: Array<string | false | null | undefined>) {
+  return inputs.filter(Boolean).join(" ");
+}
+
+const defaultStyles = {
+  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+};
+
+type Theme = "light" | "dark";
+
+// Check document class for theme (works with next-themes, etc.)
+function getDocumentTheme(): Theme | null {
+  if (typeof document === "undefined") return null;
+  if (docume

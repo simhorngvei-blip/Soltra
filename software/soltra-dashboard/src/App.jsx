@@ -11,6 +11,7 @@ import { generateVoiceboxTTS } from './utils/ttsService';
 import hubVideo from './assets/main1.mp4';
 import { useSoltraTelemetry } from './hooks/useSoltraTelemetry';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import MiniOverseerWidget from './components/MiniOverseerWidget';
 
 /* ─── Error Boundary: isolates Canvas crashes from the UI overlay ─── */
 class CanvasErrorBoundary extends Component {
@@ -755,6 +756,8 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MiniOverseerWidget />
     </div>
   );
 }

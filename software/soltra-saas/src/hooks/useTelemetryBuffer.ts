@@ -58,7 +58,9 @@ export function useMockEnergyData() {
         kwh: parseFloat(kwh.toFixed(2)),
       })
     }
-    setData(hours)
+    queueMicrotask(() => {
+      setData(hours)
+    });
   }, []) // runs once on mount (client only)
 
   return data

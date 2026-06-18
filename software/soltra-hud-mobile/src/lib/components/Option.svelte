@@ -12,7 +12,7 @@
 
   let element: SVGElement;
   let textElement: SVGTextElement;
-  let textRedElement: SVGTextElement;
+  let textRedElement: SVGTextElement | undefined = $state();
   let backgroundElement: SVGPathElement;
   let backgroundMaskElement: SVGPathElement;
 
@@ -135,7 +135,7 @@
       x="150"
       y="120"
       class={cn(
-        "text-7xl tracking-[-0.14em] italic",
+        "text-5xl tracking-[-0.14em] italic",
         {
           [colors[(index + 2) % colors.length]]: !isSelected,
           "text-black": isSelected,
@@ -152,7 +152,7 @@
           transform-origin="25% center"
           x="150"
           y="120"
-          class="text-7xl tracking-[-0.14em] italic fill-red"
+          class="text-5xl tracking-[-0.14em] italic fill-red"
         >
           {option.name}
         </text>

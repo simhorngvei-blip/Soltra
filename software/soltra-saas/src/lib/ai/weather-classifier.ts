@@ -42,7 +42,7 @@ export async function callRoboflowInference(base64Image: string): Promise<Weathe
       topClass = data.top;
       conf = data.confidence;
     } else if (data.predictions && data.predictions.length > 0) {
-      data.predictions.sort((a: any, b: any) => b.confidence - a.confidence);
+      data.predictions.sort((a: { confidence: number, class: string }, b: { confidence: number, class: string }) => b.confidence - a.confidence);
       topClass = data.predictions[0].class;
       conf = data.predictions[0].confidence;
     } else {

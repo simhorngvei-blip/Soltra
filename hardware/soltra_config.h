@@ -57,7 +57,7 @@
 #else
   // Production: your Vercel deployment URL
   #define TELEMETRY_URL "https://soltra-saas.vercel.app/api/telemetry/ingest"
-  #define TELEMETRY_KEY "soltra-ingest-dev-key"  // ← change to your production secret
+  #define TELEMETRY_KEY "soltra-ingest-prod-key-777"  // ← matches TELEMETRY_INGEST_KEY in .env.production
 #endif
 
 // ─── MOTOR CONTROLLER MAC ADDRESS ─────────────────────────────────────────────

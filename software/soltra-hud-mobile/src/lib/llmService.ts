@@ -1,6 +1,8 @@
 export const generateAIReport = async (telemetryData: any) => {
-  const OLLAMA_URL = 'http://10.0.2.2:11434/api/chat'; // Android emulator host alias
-  const OLLAMA_MODEL = 'qwen2.5:0.5b'; // Using the same model as soltra-dashboard
+  const OLLAMA_BASE = import.meta.env.VITE_OLLAMA_URL;
+  if (!OLLAMA_BASE) throw new Error('[LLM Service] VITE_OLLAMA_URL is not set in .env');
+  const OLLAMA_URL = `${OLLAMA_BASE}/api/chat`;
+  const OLLAMA_MODEL = import.meta.env.VITE_OLLAMA_MODEL || 'qwen2.5:0.5b';
 
   const lux = telemetryData.solar_yield ? telemetryData.solar_yield.toFixed(1) : 'unknown';
   const wind = telemetryData.wind_speed ? telemetryData.wind_speed.toFixed(1) : 'unknown';
