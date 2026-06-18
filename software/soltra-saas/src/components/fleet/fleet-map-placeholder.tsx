@@ -1,8 +1,10 @@
 'use client'
 
 import type { Site, Node } from '@/lib/types'
-import { MapPin } from 'lucide-react'
+import { MapPin, X, Trash2 } from 'lucide-react'
 import { Map, MapMarker, MarkerContent, MarkerPopup, MapControls } from '@/components/ui/mapcn-map-arc'
+import { deleteSite } from '@/app/actions/fleet'
+import { useTransition } from 'react'
 
 interface FleetMapProps {
   sites: Site[]
@@ -10,6 +12,16 @@ interface FleetMapProps {
 }
 
 export function FleetMap({ sites, nodes }: FleetMapProps) {
+  const [isPending, startTransition] = useTransition()
+  
+  const handleDelete = (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete the site "${name}"? This will permanently delete all associated nodes and telemetry.`)) {
+      startTransition(async () => {
+        await deleteSite(id)
+      })
+    }
+  }
+
   const sitesWithCoords    = sites.filter((s) => s.lat != null && s.lng != null)
   const sitesWithoutCoords = sites.filter((s) => s.lat == null || s.lng == null)
 
@@ -67,6 +79,15 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
                       <strong className="text-sm font-sans block mb-1">{site.name}</strong>
                       <span className="text-zinc-500 block mb-2">{site.timezone}</span>
                       <span className="text-emerald-400">● {active} active</span> <span className="text-zinc-500">/ {nodeCount} total</span>
+                      
+                      <button 
+                        onClick={() => handleDelete(site.id, site.name)}
+                        disabled={isPending}
+                        className="mt-3 w-full flex items-center justify-center gap-1 py-1.5 rounded bg-red-950/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={12} />
+                        Delete Site
+                      </button>
                     </div>
                   </MarkerPopup>
                 </MapMarker>
@@ -86,9 +107,17 @@ export function FleetMap({ sites, nodes }: FleetMapProps) {
             {sitesWithoutCoords.map((site) => (
               <span
                 key={site.id}
-                className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-400 font-mono"
+                className="inline-flex items-center gap-2 rounded border border-zinc-700 bg-zinc-800 pl-2 pr-1 py-1 text-xs text-zinc-400 font-mono"
               >
                 {site.name}
+                <button
+                  onClick={() => handleDelete(site.id, site.name)}
+                  disabled={isPending}
+                  className="p-0.5 rounded-sm hover:bg-red-900/50 hover:text-red-400 transition-colors disabled:opacity-50 cursor-pointer"
+                  title="Delete site"
+                >
+                  <X size={12} />
+                </button>
               </span>
             ))}
           </div>
