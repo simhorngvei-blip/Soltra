@@ -2,23 +2,24 @@
   import { onMount, onDestroy } from 'svelte';
   import { scale, fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
+  import { publishCmd, telemetry } from '$lib/mqttStore';
+  import { supabase } from '$lib/supabaseClient';
 
-  // ESP32-S3 Sense Camera Node URL — set VITE_CAMERA_URL in .env
-  const esp32s3Url = import.meta.env.VITE_CAMERA_URL;
-  if (!esp32s3Url) throw new Error('[Camera] VITE_CAMERA_URL is not set in .env');
-  
-  // We assume the stream URL ends with /stream, so the snapshot URL is /capture
-  const streamUrl = esp32s3Url;
-  const captureUrl = esp32s3Url.replace('/stream', '/capture');
+  const streamUrl = import.meta.env.VITE_CAMERA_STREAM_URL;
+  if (!streamUrl) throw new Error('[Camera] VITE_CAMERA_STREAM_URL missing in .env');
   
   let isStreamActive = $state(false);
-  let currentImageUrl = $state(`${captureUrl}?_cb=${new Date().getTime()}`);
+  let currentImageUrl = $state("");
+  let currentSnapshotDetections = $state<any>(null);
   let loading = $state(true);
 
-  let snapshots = $state<{url: string, timestamp: Date}[]>([]);
-
+  let snapshots = $state<{url: string, timestamp: Date, detections?: any}[]>([]);
   let touchStartX = 0;
   let touchEndX = 0;
+
+  let channel: any;
+  let supabaseSetupComplete = false;
+  let currentNodeId = "";
 
   function handleTouchStart(e: TouchEvent) {
     touchStartX = e.changedTouches[0].screenX;
@@ -33,21 +34,56 @@
 
   function handleVisibilityChange() {
     if (document.hidden) {
-      currentImageUrl = "";
+      if (isStreamActive || isCvActive) currentImageUrl = "";
     } else {
-      loading = true;
-      currentImageUrl = isStreamActive 
-        ? `${streamUrl}?_cb=${new Date().getTime()}`
-        : `${captureUrl}?_cb=${new Date().getTime()}`;
+      if (isStreamActive) {
+        loading = true;
+        currentImageUrl = `${streamUrl}?_cb=${new Date().getTime()}`;
+      } else if (isCvActive) {
+        currentImageUrl = `${cvBackendUrl}/video_feed`;
+      }
+    }
+  }
+
+  const cvBackendUrl = import.meta.env.VITE_CV_BACKEND_URL || 'http://localhost:5000';
+
+  let isCvActive = $state(false);
+
+  function toggleCvStream() {
+    isCvActive = !isCvActive;
+    if (isCvActive) {
+      isStreamActive = false; // Turn off normal stream
+      loading = false;
+      currentImageUrl = `${cvBackendUrl}/video_feed`;
+      currentSnapshotDetections = null;
+      try { fetch(`${cvBackendUrl}/api/track/start`, { method: 'POST' }); } catch(e){}
+    } else {
+      try { fetch(`${cvBackendUrl}/api/track/stop`, { method: 'POST' }); } catch(e){}
+      currentImageUrl = "";
     }
   }
   
   function toggleStream() {
     isStreamActive = !isStreamActive;
-    loading = true;
-    currentImageUrl = isStreamActive 
-      ? `${streamUrl}?_cb=${new Date().getTime()}`
-      : `${captureUrl}?_cb=${new Date().getTime()}`;
+    if (isStreamActive) {
+      isCvActive = false;
+      try { fetch(`${cvBackendUrl}/api/track/stop`, { method: 'POST' }); } catch(e){}
+      loading = true;
+      const mac = $telemetry.node_mac;
+      if (mac) publishCmd('STREAM_ON', `soltra/camera/${mac.toUpperCase()}/cmd`);
+      currentImageUrl = `${streamUrl}?_cb=${new Date().getTime()}`;
+      currentSnapshotDetections = null;
+    } else {
+      const mac = $telemetry.node_mac;
+      if (mac) publishCmd('STREAM_OFF', `soltra/camera/${mac.toUpperCase()}/cmd`);
+      if (snapshots.length > 0) {
+        currentImageUrl = snapshots[0].url;
+        currentSnapshotDetections = snapshots[0].detections;
+      } else {
+        currentImageUrl = "";
+        currentSnapshotDetections = null;
+      }
+    }
   }
 
   function requestSnapshot() {
@@ -55,23 +91,123 @@
       isStreamActive = false;
     }
     loading = true;
-    const timestamp = new Date();
-    const url = `${captureUrl}?_cb=${timestamp.getTime()}`;
-    currentImageUrl = url;
-    
-    // Add to gallery
-    snapshots = [{url, timestamp}, ...snapshots];
+    const mac = $telemetry.node_mac;
+    if (mac) {
+      console.log(`Sending SNAPSHOT cmd to soltra/camera/${mac.toUpperCase()}/cmd`);
+      publishCmd('SNAPSHOT', `soltra/camera/${mac.toUpperCase()}/cmd`);
+    } else {
+      console.warn("No node MAC available to target snapshot command.");
+      // Fallback timer if no MAC
+      setTimeout(() => { loading = false; }, 5000);
+    }
+  }
+
+  async function fetchLatestSnapshot(nodeId: string, imagePath?: string, detections?: any) {
+    loading = true;
+    let path = imagePath;
+    let eventDetections = detections;
+    if (!path) {
+      const { data, error } = await supabase
+        .from('camera_events')
+        .select('image_path, detections')
+        .eq('node_id', nodeId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (error) console.error("Error fetching latest camera_events:", error);
+      if (data) {
+        path = data.image_path;
+        eventDetections = data.detections;
+      }
+    }
+
+    if (path) {
+      const { data: urlData, error } = await supabase.storage
+        .from('camera-snapshots')
+        .createSignedUrl(path, 60 * 60); // 1 hour
+
+      if (error) console.error("Error creating signed URL:", error);
+      if (urlData) {
+        const url = urlData.signedUrl;
+        currentImageUrl = url;
+        currentSnapshotDetections = eventDetections;
+        loading = false;
+        
+        // Add to gallery if not already there (by url)
+        if (!snapshots.find(s => s.url === url)) {
+           snapshots = [{url, timestamp: new Date(), detections: eventDetections}, ...snapshots];
+        }
+      } else {
+        loading = false;
+      }
+    } else {
+      loading = false;
+    }
+  }
+
+  async function setupSupabase() {
+    if (supabaseSetupComplete) return;
+    const mac = $telemetry.node_mac;
+    if (!mac) return;
+
+    supabaseSetupComplete = true;
+
+    // Get node ID
+    const { data: node, error } = await supabase
+      .from('nodes')
+      .select('id')
+      .eq('mac_address', mac.toUpperCase())
+      .single();
+
+    if (error) {
+      console.error("Error fetching node ID for MAC:", mac, error);
+      loading = false;
+      return;
+    }
+    if (!node) {
+      loading = false;
+      return;
+    }
+
+    currentNodeId = node.id;
+
+    // Fetch latest snapshot
+    await fetchLatestSnapshot(node.id);
+
+    // Subscribe to new events
+    channel = supabase
+      .channel(`camera_events_${node.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'camera_events', filter: `node_id=eq.${node.id}` },
+        (payload) => {
+          console.log("Supabase Realtime event received:", payload);
+          fetchLatestSnapshot(node.id, payload.new.image_path, payload.new.detections);
+        }
+      )
+      .subscribe((status) => {
+        console.log("Supabase Realtime subscription status:", status);
+      });
   }
 
   onMount(() => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    // Automatically capture a snapshot on boot
-    requestSnapshot();
+  });
+
+  // Watch for node_mac to become available
+  $effect(() => {
+    if ($telemetry.node_mac && !supabaseSetupComplete) {
+      setupSupabase();
+    }
   });
 
   onDestroy(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
   });
+
 </script>
 
 <div class="absolute inset-0 w-full h-full flex items-center justify-center bg-black/85 backdrop-blur-md px-4 py-8" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd} transition:fade={{ duration: 200 }}>
@@ -108,9 +244,16 @@
         </button>
         <button type="button" onclick={toggleStream} class="flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-lg transition-all cursor-pointer {isStreamActive ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'}">
           {#if isStreamActive}
-            <iconify-icon icon="lucide:square" class="text-lg"></iconify-icon> STOP
+            <iconify-icon icon="lucide:square" class="text-lg"></iconify-icon> STOP RAW
           {:else}
-            <iconify-icon icon="lucide:play" class="text-lg"></iconify-icon> STREAM
+            <iconify-icon icon="lucide:play" class="text-lg"></iconify-icon> RAW FEED
+          {/if}
+        </button>
+        <button type="button" onclick={toggleCvStream} class="flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-lg transition-all cursor-pointer {isCvActive ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30' : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30'}">
+          {#if isCvActive}
+            <iconify-icon icon="lucide:square" class="text-lg"></iconify-icon> STOP CV
+          {:else}
+            <iconify-icon icon="lucide:target" class="text-lg"></iconify-icon> START CV
           {/if}
         </button>
         <div class="w-px h-6 bg-white/10 mx-2"></div>
@@ -129,29 +272,56 @@
           <div class="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-md text-white font-mono text-base">
             <iconify-icon icon="lucide:cpu" class="text-indigo-400"></iconify-icon> CAM-01 / ONLINE
           </div>
-          <div class="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-md {isStreamActive ? 'text-red-400' : 'text-zinc-400'} font-mono text-base">
-            <span>{isStreamActive ? '▶ MJPEG STREAM' : '📷 SNAPSHOT'}</span>
+          <div class="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-md {isStreamActive ? 'text-red-400' : isCvActive ? 'text-amber-400' : 'text-zinc-400'} font-mono text-base">
+            <span>{isStreamActive ? '▶ MJPEG STREAM' : isCvActive ? '🎯 CV TRACKING' : '📷 SNAPSHOT'}</span>
           </div>
         </div>
 
-        <img 
-          src={currentImageUrl} 
-          alt="Live Camera Feed" 
-          class="w-full h-full object-contain"
-          onload={() => { loading = false; }}
-          onerror={() => { 
-            loading = false;
-            setTimeout(() => {
-              if (!document.hidden) {
-                loading = true;
-                currentImageUrl = isStreamActive 
-                  ? `${streamUrl}?_cb=${new Date().getTime()}`
-                  : `${captureUrl}?_cb=${new Date().getTime()}`;
+        {#if currentImageUrl}
+          <img 
+            src={currentImageUrl} 
+            alt="Live Camera Feed" 
+            class="w-full h-full object-contain"
+            onload={() => { loading = false; }}
+            onerror={() => { 
+              loading = false;
+              if (isStreamActive || isCvActive) {
+                setTimeout(() => {
+                  if (!document.hidden && (isStreamActive || isCvActive)) {
+                    loading = true;
+                    currentImageUrl = isCvActive ? `http://localhost:5000/video_feed` : `${streamUrl}?_cb=${new Date().getTime()}`;
+                  }
+                }, 3000);
               }
-            }, 3000);
-          }}
-        />
+            }}
+          />
+        {:else if !loading}
+          <div class="w-full h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+            <iconify-icon icon="lucide:camera-off" class="text-5xl"></iconify-icon>
+            <span>No snapshot available</span>
+          </div>
+        {/if}
         
+        {#if currentSnapshotDetections}
+          <div class="absolute bottom-16 left-4 right-4 bg-zinc-950/80 border border-zinc-800 text-zinc-300 p-4 rounded-xl backdrop-blur-md z-20 shadow-2xl pointer-events-auto">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-bold text-lg flex items-center gap-2">
+                <span class={`h-3 w-3 rounded-full ${
+                  currentSnapshotDetections.weather === 'UNKNOWN' ? 'bg-zinc-500' :
+                  currentSnapshotDetections.weather === 'CLEAR' ? 'bg-amber-400' :
+                  currentSnapshotDetections.weather === 'RAIN' ? 'bg-blue-400' :
+                  'bg-emerald-400'
+                }`}></span>
+                Weather: {currentSnapshotDetections.weather}
+              </span>
+              <span class="text-sm text-zinc-500 font-mono font-semibold">
+                Conf: {(currentSnapshotDetections.confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+            <p class="text-sm text-zinc-400 leading-relaxed italic">{currentSnapshotDetections.reasoning}</p>
+          </div>
+        {/if}
+
         <div class="absolute bottom-0 left-0 w-full p-4 flex justify-between items-end pointer-events-none z-10 bg-gradient-to-t from-black/60 to-transparent">
           <div class="font-mono text-base text-white/70 bg-black/40 px-2 py-1 rounded">
             {new Date().toISOString()}
@@ -184,6 +354,7 @@
                 onclick={() => {
                   isStreamActive = false;
                   currentImageUrl = snap.url;
+                  currentSnapshotDetections = snap.detections;
                 }}
               >
                 <img src={snap.url} alt="Snapshot" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />

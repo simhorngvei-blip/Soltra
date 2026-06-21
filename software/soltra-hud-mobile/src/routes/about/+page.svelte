@@ -12,14 +12,66 @@
 
   let activeTab = $state(0);
 
-  // 24-hour Mock Data
+  import { supabase } from '$lib/supabaseClient';
+
+  // 24-hour Data
   let historicalData = $state(
     Array.from({ length: 24 }).map((_, i) => ({
       hour: i,
-      solarYield: Math.max(0, Math.sin((i - 6) * Math.PI / 12) * 1000 + (Math.random() * 100 - 50)),
-      windSpeed: 2 + Math.random() * 8
+      solarYield: 0,
+      windSpeed: 0
     }))
   );
+
+  onMount(async () => {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data, error } = await supabase
+      .from('telemetry')
+      .select('recorded_at, irradiance, wind_speed')
+      .gte('recorded_at', twentyFourHoursAgo)
+      .order('recorded_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching telemetry from Supabase:', error);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const currentHour = new Date().getHours();
+      
+      let buckets = Array.from({ length: 24 }).map((_, i) => ({
+        hour: (currentHour - 23 + i + 24) % 24,
+        solarYield: 0,
+        windSpeed: 0,
+        count: 0
+      }));
+
+      data.forEach(row => {
+        const d = new Date(row.recorded_at);
+        const diffHours = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60));
+        if (diffHours >= 0 && diffHours < 24) {
+          const index = 23 - diffHours;
+          buckets[index].solarYield += (row.irradiance || 0);
+          buckets[index].windSpeed += (row.wind_speed || 0);
+          buckets[index].count++;
+        }
+      });
+
+      buckets.forEach(b => {
+        if (b.count > 0) {
+          b.solarYield /= b.count;
+          b.windSpeed /= b.count;
+        }
+      });
+
+      historicalData = buckets.map(b => ({
+        hour: b.hour,
+        solarYield: b.solarYield,
+        windSpeed: b.windSpeed
+      }));
+    }
+  });
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === "ArrowUp") activeTab = Math.max(0, activeTab - 1);
@@ -27,16 +79,43 @@
     if (e.key === "Escape" || e.key === "Backspace") goto('/');
   }
 
-  function exportCSV() {
+  import { Capacitor } from '@capacitor/core';
+  import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+  import { Share } from '@capacitor/share';
+
+  async function exportCSV() {
     const headers = "Hour,SolarYield_W_m2,WindSpeed_m_s\n";
     const rows = historicalData.map(d => `${d.hour}:00,${d.solarYield.toFixed(2)},${d.windSpeed.toFixed(2)}`).join("\n");
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `soltra_telemetry_${new Date().getTime()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const csvContent = headers + rows;
+    const fileName = `soltra_telemetry_${new Date().getTime()}.csv`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+
+        await Share.share({
+          title: 'Export CSV',
+          text: 'Soltra Telemetry Data',
+          url: result.uri,
+          dialogTitle: 'Share or Save CSV'
+        });
+      } catch (e) {
+        console.error("Error exporting via Capacitor:", e);
+      }
+    } else {
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   // Calculate SVG path

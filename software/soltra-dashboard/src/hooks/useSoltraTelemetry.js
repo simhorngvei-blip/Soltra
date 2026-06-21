@@ -4,16 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 // ─── DB Column → UI field name mapping ───────────────────────────────────────
 function normalize(row) {
   return {
-    wind:        Number(row.wind_speed_ms ?? 0),
-    irradiance:  Number(row.irradiance_wm2 ?? 0),
-    azimuth:     Number(row.pan_angle_deg  ?? 0),
-    tilt_angle:  Number(row.tilt_angle_deg ?? 0),
+    wind:        Number(row.wind_speed ?? 0),
+    irradiance:  Number(row.irradiance ?? 0),
+    azimuth:     Number(row.pan_angle  ?? 0),
+    tilt_angle:  Number(row.tilt_angle ?? 0),
     lux:         Number(row.lux ?? 0),
     uv_index:    Number(row.uv_index ?? 0),
     battery_pct: Number(row.battery_pct ?? 0),
-    humidity_pct: Number(row.humidity_pct ?? 0),
-    power_watts: Number(row.power_watts ?? 0),
-    panel_volts: Number(row.panel_volts ?? 0),
+    humidity_pct: Number(row.humidity ?? 0),
+    power_watts: Number(row.watts ?? 0),
+    panel_volts: Number(row.volts ?? 0),
     wind_alert:  Boolean(row.wind_alert),
     node_status: row.node_status ?? null,
     created_at:  row.recorded_at ?? row.created_at,
@@ -49,7 +49,7 @@ export function useSoltraTelemetry() {
       try {
         const { data, error } = await supabase
           .from('telemetry')
-          .select('wind_speed_ms, irradiance_wm2, lux, uv_index, battery_pct, humidity_pct, power_watts, panel_volts, pan_angle_deg, tilt_angle_deg, wind_alert, node_status, recorded_at')
+          .select('wind_speed, irradiance, lux, uv_index, battery_pct, humidity, watts, volts, pan_angle, tilt_angle, wind_alert, node_status, recorded_at')
           .order('recorded_at', { ascending: false })
           .limit(20);
 

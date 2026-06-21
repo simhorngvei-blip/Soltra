@@ -79,9 +79,9 @@ export function initMqtt(config?: { host?: string, user?: string, pass?: string 
   });
 }
 
-export function publishCmd(cmd: number | string) {
+export function publishCmd(cmd: number | string, topic: string = 'helios/control/manual') {
   if (client && client.connected) {
-    client.publish('helios/control/manual', String(cmd), { qos: 0 });
+    client.publish(topic, String(cmd), { qos: 0 });
   } else {
     console.warn('MQTT Publish failed: Not connected');
   }

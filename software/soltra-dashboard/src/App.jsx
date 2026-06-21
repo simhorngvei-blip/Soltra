@@ -706,37 +706,49 @@ export default function App() {
                <div className="scanline-overlay" />
                
                {/* Header */}
-               <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black to-transparent flex justify-between items-center">
+               <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black to-transparent flex justify-between items-center z-10">
                   <div className="text-[#ff2a2a] font-mono text-xl flex items-center gap-3">
                     <div className="w-3 h-3 bg-[#ff2a2a] rounded-full animate-pulse" />
                     LIVE S3 FEED: CAM_01
                   </div>
-                  <button onClick={() => setShowCamera(false)} className="text-white hover:text-[#ff2a2a]">
-                    <X size={24} />
-                  </button>
+                  
+                  {/* CV Controls */}
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      try { await fetch(`${import.meta.env.VITE_CV_BACKEND_URL || 'http://localhost:5000'}/api/track/start`, { method: 'POST' }); } catch(e){}
+                    }} className="bg-[rgba(0,217,255,0.2)] text-[#00d9ff] border border-[#00d9ff] px-3 py-1 text-xs font-mono hover:bg-[#00d9ff] hover:text-black transition-colors">
+                      START TRACKING
+                    </button>
+                    <button onClick={async () => {
+                      try { await fetch(`${import.meta.env.VITE_CV_BACKEND_URL || 'http://localhost:5000'}/api/track/stop`, { method: 'POST' }); } catch(e){}
+                    }} className="bg-[rgba(255,42,42,0.2)] text-[#ff2a2a] border border-[#ff2a2a] px-3 py-1 text-xs font-mono hover:bg-[#ff2a2a] hover:text-black transition-colors">
+                      STOP TRACKING
+                    </button>
+                    <button onClick={() => setShowCamera(false)} className="text-white hover:text-[#ff2a2a] ml-4">
+                      <X size={24} />
+                    </button>
+                  </div>
                </div>
 
                {/* Live Camera Stream */}
-               {import.meta.env.VITE_CAMERA_STREAM_URL ? (
-                 <img 
-                   src={import.meta.env.VITE_CAMERA_STREAM_URL} 
-                   alt="Live camera feed" 
-                   className="absolute inset-0 w-full h-full object-cover" 
-                 />
-               ) : (
-                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 gap-3">
-                   <div className="w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-zinc-600">
-                       <path d="m15 8-8.5 8.5M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>
-                       <path d="M21 3 9 15"/>
-                     </svg>
-                   </div>
-                   <div className="text-center">
-                     <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Camera Offline</p>
-                     <p className="text-zinc-700 font-mono text-[10px] mt-1">VITE_CAMERA_STREAM_URL not configured</p>
-                   </div>
+               <img 
+                 src={`${import.meta.env.VITE_CV_BACKEND_URL || 'http://localhost:5000'}/video_feed`}
+                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                 alt="Live CV camera feed" 
+                 className="absolute inset-0 w-full h-full object-cover" 
+               />
+               <div className="absolute inset-0 flex-col items-center justify-center bg-zinc-950/90 gap-3" style={{display: 'none'}}>
+                 <div className="w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-zinc-600">
+                     <path d="m15 8-8.5 8.5M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>
+                     <path d="M21 3 9 15"/>
+                   </svg>
                  </div>
-               )}
+                 <div className="text-center">
+                   <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">CV Backend Offline</p>
+                   <p className="text-zinc-700 font-mono text-[10px] mt-1">Please start the soltra-cv python backend</p>
+                 </div>
+               </div>
 
                {/* Simulated scanline overlay */}
                <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)' }} />

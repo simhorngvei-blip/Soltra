@@ -2,3 +2,6 @@ opencv-python
 numpy
 requests
 paho-mqtt
+
+Flask
+flask-cors
