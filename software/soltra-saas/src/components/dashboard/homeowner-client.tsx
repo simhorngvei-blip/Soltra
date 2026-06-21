@@ -107,6 +107,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   const [energyData, setEnergyData] = useState<EnergyBar[]>([])
   const [wasConnected, setWasConnected] = useState(false)
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
+  const [snapshotWeather, setSnapshotWeather] = useState<{ weather: string; reasoning: string; confidence: number } | null>(null)
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(true)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [isStreamActive, setIsStreamActive] = useState(false)
@@ -117,18 +118,23 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   useEffect(() => {
     const supabase = createClient()
 
-    const fetchSnapshot = async (imagePath?: string) => {
+    const fetchSnapshot = async (imagePath?: string, detections?: any) => {
       setIsLoadingSnapshot(true)
       let path = imagePath
+      let eventDetections = detections
+
       if (!path) {
         const { data } = await supabase
           .from('camera_events')
-          .select('image_path')
+          .select('image_path, detections')
           .eq('node_id', nodeId)
           .order('created_at', { ascending: false })
           .limit(1)
           .single()
-        if (data) path = data.image_path
+        if (data) {
+          path = data.image_path
+          eventDetections = data.detections
+        }
       }
 
       if (path) {
@@ -137,6 +143,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
           .createSignedUrl(path, 60 * 60) // 1 hour
         if (urlData) {
           setSnapshotUrl(urlData.signedUrl)
+          setSnapshotWeather(eventDetections || null)
           setImageLoaded(false)
         }
       }
@@ -150,7 +157,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'camera_events', filter: `node_id=eq.${nodeId}` },
-        (payload) => fetchSnapshot(payload.new.image_path)
+        (payload) => fetchSnapshot(payload.new.image_path, payload.new.detections)
       )
       .subscribe()
 
@@ -447,6 +454,25 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
                     className={`w-full h-full object-contain transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={() => setImageLoaded(true)}
                   />
+                  {snapshotWeather && imageLoaded && (
+                    <div className="absolute bottom-2 left-2 right-2 bg-zinc-950/80 border border-zinc-800 text-zinc-300 p-3 rounded-lg backdrop-blur-md z-10 shadow-xl">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="font-semibold text-sm flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${
+                            snapshotWeather.weather === 'UNKNOWN' ? 'bg-zinc-500' :
+                            snapshotWeather.weather === 'CLEAR' ? 'bg-amber-400' :
+                            snapshotWeather.weather === 'RAIN' ? 'bg-blue-400' :
+                            'bg-emerald-400'
+                          }`}></span>
+                          Weather: {snapshotWeather.weather}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-mono">
+                          Conf: {(snapshotWeather.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed italic">{snapshotWeather.reasoning}</p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-zinc-600 text-sm font-mono flex flex-col items-center">
