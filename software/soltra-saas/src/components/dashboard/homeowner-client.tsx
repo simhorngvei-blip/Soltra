@@ -111,6 +111,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(true)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [isStreamActive, setIsStreamActive] = useState(false)
+  const [isCvActive, setIsCvActive] = useState(false)
   const { toasts, toast, dismiss } = useToast()
   const { speak, isGenerating } = useTTS()
 
@@ -238,10 +239,37 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   }
 
   const toggleStream = () => {
+    if (isCvActive) {
+      setIsCvActive(false)
+    }
     const newStatus = !isStreamActive
     publish(`soltra/camera/${nodeMac}/cmd`, newStatus ? 'STREAM_ON' : 'STREAM_OFF')
     setIsStreamActive(newStatus)
     toast(newStatus ? 'Starting live stream...' : 'Stream stopped to save power.', 'success')
+  }
+
+  const toggleCvStream = async () => {
+    const cvUrl = process.env.NEXT_PUBLIC_CV_BACKEND_URL
+    if (!cvUrl) {
+      toast('NEXT_PUBLIC_CV_BACKEND_URL not configured.', 'error')
+      return
+    }
+
+    const newStatus = !isCvActive
+    try {
+      const res = await fetch(`${cvUrl}/api/track/${newStatus ? 'start' : 'stop'}`, {
+        method: 'POST'
+      })
+      if (!res.ok) throw new Error('CV backend request failed')
+      
+      setIsCvActive(newStatus)
+      if (newStatus && !isStreamActive) {
+        setIsStreamActive(true) // Render the video tag
+      }
+      toast(newStatus ? 'Started CV Tracking...' : 'Stopped CV Tracking.', 'success')
+    } catch (err) {
+      toast('Could not contact CV Backend. Is the tunnel running?', 'error')
+    }
   }
 
   // ── CSV Export ──────────────────────────────────────────────────────────────
@@ -397,7 +425,7 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                 </span>
-                Live MJPEG Stream
+                {isCvActive ? 'Live CV Tracking' : 'Live MJPEG Stream'}
               </>
             ) : (
               <>
@@ -416,21 +444,33 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
             <button
               onClick={toggleStream}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                isStreamActive 
+                isStreamActive && !isCvActive
                   ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
                   : 'bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border border-emerald-900/50'
               }`}
             >
-              {isStreamActive ? <><Square size={14} /> Stop Stream</> : <><Play size={14} /> Start Live Stream</>}
+              {isStreamActive && !isCvActive ? <><Square size={14} /> Stop Raw</> : <><Play size={14} /> Raw Stream</>}
+            </button>
+            <button
+              onClick={toggleCvStream}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                isCvActive 
+                  ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
+                  : 'bg-indigo-950/50 text-indigo-400 hover:bg-indigo-900/50 border border-indigo-900/50'
+              }`}
+            >
+              {isCvActive ? <><Square size={14} /> Stop CV</> : <><Crosshair size={14} /> Start Tracking</>}
             </button>
           </div>
         </div>
 
         <div className="aspect-video bg-black relative flex items-center justify-center">
-          {isStreamActive && process.env.NEXT_PUBLIC_CAMERA_STREAM_URL ? (
+          {isStreamActive ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img 
-              src={process.env.NEXT_PUBLIC_CAMERA_STREAM_URL} 
+              src={isCvActive && process.env.NEXT_PUBLIC_CV_BACKEND_URL 
+                ? `${process.env.NEXT_PUBLIC_CV_BACKEND_URL}/video_feed` 
+                : process.env.NEXT_PUBLIC_CAMERA_STREAM_URL} 
               alt="Live Camera Feed" 
               className="w-full h-full object-cover"
             />
