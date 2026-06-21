@@ -58,100 +58,107 @@ def camera_thread():
     global is_tracking, last_pub_time, mqtt_client
     global latest_raw_frame, latest_cv_frame
 
+    import requests
     while True:
         print(f"[CV] Attempting to connect to camera at {CAMERA_URL}...")
-        cap = cv2.VideoCapture(CAMERA_URL)
-        
-        if not cap.isOpened():
-            print("[CV] ERROR: Cannot open video stream. Retrying in 2s...")
-            time.sleep(2)
-            continue
-
-        print("[CV] Stream opened successfully.")
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("[CV] Connection lost. Reconnecting...")
-                break
-
-            # Encode raw frame immediately
-            ret_raw, raw_buffer = cv2.imencode('.jpg', frame)
-            if ret_raw:
-                raw_bytes = raw_buffer.tobytes()
-            else:
+        try:
+            res = requests.get(CAMERA_URL, stream=True, timeout=10)
+            if res.status_code != 200:
+                print(f"[CV] ERROR: Unexpected status code {res.status_code}. Retrying in 2s...")
+                time.sleep(2)
                 continue
+                
+            print("[CV] Stream opened successfully.")
+            bytes_buffer = bytes()
+            
+            for chunk in res.iter_content(chunk_size=4096):
+                if not chunk:
+                    break
+                bytes_buffer += chunk
+                a = bytes_buffer.find(b'\xff\xd8')
+                b = bytes_buffer.find(b'\xff\xd9')
+                if a != -1 and b != -1:
+                    jpg = bytes_buffer[a:b+2]
+                    bytes_buffer = bytes_buffer[b+2:]
+                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    
+                    if frame is None:
+                        continue
+                        
+                    raw_bytes = jpg
 
-            # ─── CV Processing ──────────────────────────────────────────────────
-            cv_frame = frame.copy()
-            h, w = cv_frame.shape[:2]
-            center_x, center_y = w // 2, h // 2
+                    # ─── CV Processing ──────────────────────────────────────────────────
+                    cv_frame = frame.copy()
+                    h, w = cv_frame.shape[:2]
+                    center_x, center_y = w // 2, h // 2
 
-            gray = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2GRAY)
-            _, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    gray = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2GRAY)
+                    _, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
+                    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            cv2.line(cv_frame, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
-            cv2.line(cv_frame, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
+                    cv2.line(cv_frame, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
+                    cv2.line(cv_frame, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
 
-            sun_found = False
-            if contours:
-                contours = sorted(contours, key=cv2.contourArea, reverse=True)
-                largest  = contours[0]
-                area     = cv2.contourArea(largest)
+                    sun_found = False
+                    if contours:
+                        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                        largest  = contours[0]
+                        area     = cv2.contourArea(largest)
 
-                if area > 100:
-                    M = cv2.moments(largest)
-                    if M["m00"] != 0:
-                        sun_x = int(M["m10"] / M["m00"])
-                        sun_y = int(M["m01"] / M["m00"])
-                        sun_found = True
+                        if area > 100:
+                            M = cv2.moments(largest)
+                            if M["m00"] != 0:
+                                sun_x = int(M["m10"] / M["m00"])
+                                sun_y = int(M["m01"] / M["m00"])
+                                sun_found = True
 
-                        bx, by, bw, bh = cv2.boundingRect(largest)
-                        cv2.rectangle(cv_frame, (bx, by), (bx + bw, by + bh), (255, 255, 0), 2)
-                        cv2.circle(cv_frame, (sun_x, sun_y), 5, (255, 255, 0), -1)
-                        cv2.line(cv_frame, (center_x, center_y), (sun_x, sun_y), (0, 255, 0), 1)
+                                bx, by, bw, bh = cv2.boundingRect(largest)
+                                cv2.rectangle(cv_frame, (bx, by), (bx + bw, by + bh), (255, 255, 0), 2)
+                                cv2.circle(cv_frame, (sun_x, sun_y), 5, (255, 255, 0), -1)
+                                cv2.line(cv_frame, (center_x, center_y), (sun_x, sun_y), (0, 255, 0), 1)
 
-                        if is_tracking:
-                            pan_offset  =  sun_x - center_x
-                            tilt_offset =  center_y - sun_y
+                                if is_tracking:
+                                    pan_offset  =  sun_x - center_x
+                                    tilt_offset =  center_y - sun_y
 
-                            pan_deg  = pan_offset  * DEG_PER_PIXEL if abs(pan_offset)  > DEADBAND_PX else 0.0
-                            tilt_deg = tilt_offset * DEG_PER_PIXEL if abs(tilt_offset) > DEADBAND_PX else 0.0
+                                    pan_deg  = pan_offset  * DEG_PER_PIXEL if abs(pan_offset)  > DEADBAND_PX else 0.0
+                                    tilt_deg = tilt_offset * DEG_PER_PIXEL if abs(tilt_offset) > DEADBAND_PX else 0.0
 
-                            current_time = time.time()
-                            if (current_time - last_pub_time) > PUBLISH_RATE_S:
-                                if pan_deg != 0.0 or tilt_deg != 0.0:
-                                    payload = {
-                                        "target_pan": round(pan_deg, 2),
-                                        "target_tilt": round(tilt_deg, 2),
-                                        "device_id": "Node4"
-                                    }
-                                    if mqtt_client:
-                                        mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                                    print(f"[TRACKING] Sent override: {payload}")
-                                    last_pub_time = current_time
+                                    current_time = time.time()
+                                    if (current_time - last_pub_time) > PUBLISH_RATE_S:
+                                        if pan_deg != 0.0 or tilt_deg != 0.0:
+                                            payload = {
+                                                "target_pan": round(pan_deg, 2),
+                                                "target_tilt": round(tilt_deg, 2),
+                                                "device_id": "Node4"
+                                            }
+                                            if mqtt_client:
+                                                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                                            print(f"[TRACKING] Sent override: {payload}")
+                                            last_pub_time = current_time
 
-            if not sun_found:
-                cv2.putText(cv_frame, "SUN NOT DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            else:
-                status_color = (0, 255, 0) if is_tracking else (0, 165, 255)
-                status_text = "TRACKING ACTIVE" if is_tracking else "TRACKING PAUSED"
-                cv2.putText(cv_frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
+                    if not sun_found:
+                        cv2.putText(cv_frame, "SUN NOT DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    else:
+                        status_color = (0, 255, 0) if is_tracking else (0, 165, 255)
+                        status_text = "TRACKING ACTIVE" if is_tracking else "TRACKING PAUSED"
+                        cv2.putText(cv_frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
 
-            ret_cv, cv_buffer = cv2.imencode('.jpg', cv_frame)
-            if ret_cv:
-                cv_bytes = cv_buffer.tobytes()
-            else:
-                cv_bytes = None
+                    ret_cv, cv_buffer = cv2.imencode('.jpg', cv_frame)
+                    if ret_cv:
+                        cv_bytes = cv_buffer.tobytes()
+                    else:
+                        cv_bytes = None
 
-            with frame_condition:
-                latest_raw_frame = raw_bytes
-                latest_cv_frame = cv_bytes
-                frame_condition.notify_all()
+                    with frame_condition:
+                        latest_raw_frame = raw_bytes
+                        latest_cv_frame = cv_bytes
+                        frame_condition.notify_all()
+                        
+        except Exception as e:
+            print(f"[CV] Connection error: {e}. Reconnecting in 2s...")
         
-        cap.release()
-        time.sleep(1)
+        time.sleep(2)
 
 threading.Thread(target=camera_thread, daemon=True).start()
 
