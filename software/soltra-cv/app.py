@@ -22,12 +22,16 @@ MQTT_TOPIC   = "helios/control/ai_override"
 DEADBAND_PX   = 20
 DEG_PER_PIXEL = 0.05
 PUBLISH_RATE_S = 0.5
-CAMERA_URL = "http://192.168.100.32:81/stream"  # Node 4 IP
+CAMERA_URL = "http://10.45.27.233/stream"  # Node 4 IP
 
 # Global state
 is_tracking = False
 mqtt_client = None
 last_pub_time = 0
+
+latest_raw_frame = None
+latest_cv_frame = None
+frame_condition = threading.Condition()
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
@@ -50,106 +54,127 @@ def setup_mqtt():
 
 setup_mqtt()
 
-def generate_frames():
+def camera_thread():
     global is_tracking, last_pub_time, mqtt_client
-
-    print(f"[CV] Attempting to connect to camera at {CAMERA_URL}...")
-    cap = cv2.VideoCapture(CAMERA_URL)
-    
-    if not cap.isOpened():
-        print("[CV] ERROR: Cannot open video stream.")
-        return
-
-    print("[CV] Stream opened successfully.")
+    global latest_raw_frame, latest_cv_frame
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            # Reconnect logic
-            time.sleep(1)
-            cap = cv2.VideoCapture(CAMERA_URL)
+        print(f"[CV] Attempting to connect to camera at {CAMERA_URL}...")
+        cap = cv2.VideoCapture(CAMERA_URL)
+        
+        if not cap.isOpened():
+            print("[CV] ERROR: Cannot open video stream. Retrying in 2s...")
+            time.sleep(2)
             continue
 
-        h, w = frame.shape[:2]
-        center_x, center_y = w // 2, h // 2
+        print("[CV] Stream opened successfully.")
 
-        # Convert to grayscale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("[CV] Connection lost. Reconnecting...")
+                break
+
+            # Encode raw frame immediately
+            ret_raw, raw_buffer = cv2.imencode('.jpg', frame)
+            if ret_raw:
+                raw_bytes = raw_buffer.tobytes()
+            else:
+                continue
+
+            # ─── CV Processing ──────────────────────────────────────────────────
+            cv_frame = frame.copy()
+            h, w = cv_frame.shape[:2]
+            center_x, center_y = w // 2, h // 2
+
+            gray = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            cv2.line(cv_frame, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
+            cv2.line(cv_frame, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
+
+            sun_found = False
+            if contours:
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                largest  = contours[0]
+                area     = cv2.contourArea(largest)
+
+                if area > 100:
+                    M = cv2.moments(largest)
+                    if M["m00"] != 0:
+                        sun_x = int(M["m10"] / M["m00"])
+                        sun_y = int(M["m01"] / M["m00"])
+                        sun_found = True
+
+                        bx, by, bw, bh = cv2.boundingRect(largest)
+                        cv2.rectangle(cv_frame, (bx, by), (bx + bw, by + bh), (255, 255, 0), 2)
+                        cv2.circle(cv_frame, (sun_x, sun_y), 5, (255, 255, 0), -1)
+                        cv2.line(cv_frame, (center_x, center_y), (sun_x, sun_y), (0, 255, 0), 1)
+
+                        if is_tracking:
+                            pan_offset  =  sun_x - center_x
+                            tilt_offset =  center_y - sun_y
+
+                            pan_deg  = pan_offset  * DEG_PER_PIXEL if abs(pan_offset)  > DEADBAND_PX else 0.0
+                            tilt_deg = tilt_offset * DEG_PER_PIXEL if abs(tilt_offset) > DEADBAND_PX else 0.0
+
+                            current_time = time.time()
+                            if (current_time - last_pub_time) > PUBLISH_RATE_S:
+                                if pan_deg != 0.0 or tilt_deg != 0.0:
+                                    payload = {
+                                        "target_pan": round(pan_deg, 2),
+                                        "target_tilt": round(tilt_deg, 2),
+                                        "device_id": "Node4"
+                                    }
+                                    if mqtt_client:
+                                        mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                                    print(f"[TRACKING] Sent override: {payload}")
+                                    last_pub_time = current_time
+
+            if not sun_found:
+                cv2.putText(cv_frame, "SUN NOT DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            else:
+                status_color = (0, 255, 0) if is_tracking else (0, 165, 255)
+                status_text = "TRACKING ACTIVE" if is_tracking else "TRACKING PAUSED"
+                cv2.putText(cv_frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
+
+            ret_cv, cv_buffer = cv2.imencode('.jpg', cv_frame)
+            if ret_cv:
+                cv_bytes = cv_buffer.tobytes()
+            else:
+                cv_bytes = None
+
+            with frame_condition:
+                latest_raw_frame = raw_bytes
+                latest_cv_frame = cv_bytes
+                frame_condition.notify_all()
         
-        # Threshold: >240 is very bright (sun/light source)
-        _, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
+        cap.release()
+        time.sleep(1)
+
+threading.Thread(target=camera_thread, daemon=True).start()
+
+def generate_stream(stream_type="cv"):
+    while True:
+        with frame_condition:
+            frame_condition.wait()
+            if stream_type == "cv":
+                frame_bytes = latest_cv_frame
+            else:
+                frame_bytes = latest_raw_frame
         
-        # Find contours of bright blobs
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Draw centre crosshair (red)
-        cv2.line(frame, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
-        cv2.line(frame, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
-
-        sun_found = False
-        if contours:
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)
-            largest  = contours[0]
-            area     = cv2.contourArea(largest)
-
-            if area > 100:
-                M = cv2.moments(largest)
-                if M["m00"] != 0:
-                    sun_x = int(M["m10"] / M["m00"])
-                    sun_y = int(M["m01"] / M["m00"])
-                    sun_found = True
-
-                    # Draw tracking box + centroid (cyan)
-                    bx, by, bw, bh = cv2.boundingRect(largest)
-                    cv2.rectangle(frame, (bx, by), (bx + bw, by + bh), (255, 255, 0), 2)
-                    cv2.circle(frame, (sun_x, sun_y), 5, (255, 255, 0), -1)
-
-                    # Draw error line from centre to sun
-                    cv2.line(frame, (center_x, center_y), (sun_x, sun_y), (0, 255, 0), 1)
-
-                    if is_tracking:
-                        # ── Calculate error ───────────────────────────────────────
-                        pan_offset  =  sun_x - center_x   # pixels
-                        tilt_offset =  center_y - sun_y   # pixels (Y axis flipped)
-
-                        # ── Deadband + degree conversion ──────────────────────────
-                        pan_deg  = pan_offset  * DEG_PER_PIXEL if abs(pan_offset)  > DEADBAND_PX else 0.0
-                        tilt_deg = tilt_offset * DEG_PER_PIXEL if abs(tilt_offset) > DEADBAND_PX else 0.0
-
-                        current_time = time.time()
-                        if (current_time - last_pub_time) > PUBLISH_RATE_S:
-                            if pan_deg != 0.0 or tilt_deg != 0.0:
-                                payload = {
-                                    "target_pan": round(pan_deg, 2),
-                                    "target_tilt": round(tilt_deg, 2),
-                                    "device_id": "Node4"
-                                }
-                                if mqtt_client:
-                                    mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                                print(f"[TRACKING] Sent override: {payload}")
-                                last_pub_time = current_time
-
-        if not sun_found:
-            cv2.putText(frame, "SUN NOT DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        else:
-            status_color = (0, 255, 0) if is_tracking else (0, 165, 255)
-            status_text = "TRACKING ACTIVE" if is_tracking else "TRACKING PAUSED"
-            cv2.putText(frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
-
-        # Encode the frame in JPEG format
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if not ret:
-            continue
-        
-        frame_bytes = buffer.tobytes()
-
-        # Yield the output frame in the byte format
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        if frame_bytes is not None:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 @app.route('/video_feed')
 def video_feed():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate_stream("cv"), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/stream')
+def raw_stream():
+    return Response(generate_stream("raw"), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/track/start', methods=['POST'])
 def start_tracking():

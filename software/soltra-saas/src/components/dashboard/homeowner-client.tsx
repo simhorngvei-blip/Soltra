@@ -258,7 +258,10 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
     const newStatus = !isCvActive
     try {
       const res = await fetch(`${cvUrl}/api/track/${newStatus ? 'start' : 'stop'}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
       })
       if (!res.ok) throw new Error('CV backend request failed')
       
