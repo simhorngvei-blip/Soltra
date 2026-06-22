@@ -61,6 +61,13 @@ function Scene({ animationName, expressionName, shaderMode, isTalking, audioAnal
 
       <Suspense fallback={null}>
         <DigitalTwinEnv position={[6.5, -0.95, 0]} scale={0.18} />
+        
+        {/* Extended dark floor to cover the black void at the bottom of the screen */}
+        <mesh position={[0, -0.96, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial color="#050505" roughness={0.9} metalness={0.1} />
+        </mesh>
+
         <VrmAvatar 
           position={[0, -1, 1.0]} 
           scale={1.05} 
