@@ -61,14 +61,6 @@ function Scene({ animationName, expressionName, shaderMode, isTalking, audioAnal
 
       <Suspense fallback={null}>
         <DigitalTwinEnv position={[6.5, -0.95, 0]} scale={0.18} />
-        
-        {/* Extended platform to cover the void at the bottom of the screen */}
-        <mesh position={[0, -0.96, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[200, 200]} />
-          <meshStandardMaterial color="#333333" roughness={0.8} metalness={0.2} />
-        </mesh>
-        <gridHelper args={[200, 200, '#00d9ff', '#00d9ff']} position={[0, -0.95, 0]} />
-
         <VrmAvatar 
           position={[0, -1, 1.0]} 
           scale={1.05} 
@@ -81,10 +73,10 @@ function Scene({ animationName, expressionName, shaderMode, isTalking, audioAnal
       </Suspense>
 
       <OrbitControls
-        target={[0, 0.4, 0]}
+        target={[0, 0.7, 0]}
         minDistance={1.5}
-        maxDistance={5.0}
-        minPolarAngle={Math.PI / 3}
+        maxDistance={4.5}
+        minPolarAngle={Math.PI / 2.2}
         maxPolarAngle={Math.PI / 1.8}
         minAzimuthAngle={-Math.PI / 4}
         maxAzimuthAngle={Math.PI / 3.5}
@@ -322,7 +314,7 @@ export default function App() {
         loop 
         muted 
         playsInline 
-        className="absolute inset-0 w-full h-full object-cover opacity-50 z-0 scale-125"
+        className="absolute inset-0 w-full h-full object-cover opacity-50 z-0"
       />
 
       {/* Global CRT Scanline Overlay */}
@@ -332,8 +324,11 @@ export default function App() {
       <CanvasErrorBoundary>
         <Canvas
           shadows
-          camera={{ position: [0, 1.4, 4.5], fov: 50 }}
+          camera={{ position: [0, 0.8, 5], fov: 50 }}
           style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+          onCreated={({ gl }) => {
+            gl.setClearColor('#000300'); // Very dark green/black
+          }}
         >
           <Scene 
             animationName={currentAnimation} 
