@@ -73,8 +73,9 @@ export function useSoltraTelemetry() {
     // ── Supabase Realtime subscription ─────────────────────────────────────
     let channel = null;
     if (supabase) {
+      const channelName = `soltra-telemetry-${Math.random().toString(36).substring(7)}`;
       channel = supabase
-        .channel('soltra-dashboard-telemetry')
+        .channel(channelName)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'telemetry' },
