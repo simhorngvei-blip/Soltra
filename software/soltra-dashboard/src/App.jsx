@@ -326,9 +326,6 @@ export default function App() {
           shadows
           camera={{ position: [0, 0.8, 5], fov: 50 }}
           style={{ position: 'absolute', inset: 0, zIndex: 1 }}
-          onCreated={({ gl }) => {
-            gl.setClearColor('#000300'); // Very dark green/black
-          }}
         >
           <Scene 
             animationName={currentAnimation} 
