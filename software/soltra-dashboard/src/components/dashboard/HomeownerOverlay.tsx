@@ -373,275 +373,285 @@ export function HomeownerOverlay({ nodeId, nodeMac, nodeLabel, siteName, siteTim
   const lastUpdateTime = latest?.timestamp ?? null
 
   return (
-    <div className="absolute inset-0 z-10 overflow-y-auto pointer-events-none">
-      <div className="p-6 max-w-5xl mx-auto space-y-6 pointer-events-auto">
-        {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">{siteName}</h1>
-          <p className="text-sm text-zinc-500 mt-0.5 font-mono">
-            {nodeLabel} · {nodeMac} · {siteTimezone}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <AnimatePresence mode="wait">
-            {isConnected ? (
-              <motion.div
-                key="connected"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="flex items-center gap-1.5 text-xs text-emerald-400"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                Live
-              </motion.div>
-            ) : (
-              <motion.div
-                key="disconnected"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="flex items-center gap-1.5 text-xs text-zinc-500"
-              >
-                <WifiOff size={12}/> Waiting for data…
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+    <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none p-4 md:p-8 pb-12">
+      <div className="flex flex-col md:flex-row justify-between items-start w-full h-full gap-8 max-w-[1800px] mx-auto">
+        
+        {/* =========================================
+            LEFT COLUMN
+            ========================================= */}
+        <div className="w-full md:w-[350px] lg:w-[400px] xl:w-[450px] flex flex-col gap-6 pointer-events-auto h-full overflow-y-auto pr-2 custom-scrollbar pb-24 mask-image-bottom">
+          
+          {/* Header */}
+          <div className="flex flex-col gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-zinc-100">{siteName}</h1>
+              <p className="text-sm text-zinc-500 mt-0.5 font-mono">
+                {nodeLabel} · {nodeMac}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <AnimatePresence mode="wait">
+                {isConnected ? (
+                  <motion.div
+                    key="connected"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded-md border border-emerald-900/50"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    Live Connection
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="disconnected"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-900/50 px-2 py-1 rounded-md border border-zinc-800"
+                  >
+                    <WifiOff size={12}/> Waiting for data…
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
 
-      {/* Live Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <StatCard
-          label="Power" icon={Zap} accent="amber"
-          value={latest?.watts?.toFixed(1) ?? '—'} unit="W"
-        />
-        <StatCard
-          label="Voltage" icon={Activity} accent="emerald"
-          value={latest?.volts?.toFixed(1) ?? '—'} unit="V"
-        />
-        <StatCard
-          label="Irradiance" icon={Sun} accent="amber"
-          value={latest?.solar_yield?.toFixed(0) ?? '—'} unit="W/m²"
-        />
-        <StatCard
-          label="LDR / Lux" icon={Lightbulb} accent="amber"
-          value={latest?.lux?.toFixed(0) ?? '—'} unit="lux"
-        />
-        <StatCard
-          label="UV Index" icon={SunMedium} accent="amber"
-          value={latest?.uv_index?.toFixed(1) ?? '—'} unit=""
-        />
-        <StatCard
-          label="Wind Speed" icon={Wind} accent="sky"
-          value={latest?.wind_speed?.toFixed(1) ?? '—'} unit="m/s"
-        />
-        <StatCard
-          label="Humidity" icon={Droplets} accent="sky"
-          value={latest?.humidity?.toFixed(1) ?? '—'} unit="%"
-        />
-        <StatCard
-          label="Battery" icon={Battery} accent="emerald"
-          value={latest?.battery_pct?.toFixed(0) ?? '—'} unit="%"
-        />
-        <StatCard
-          label="Pan Angle" icon={Crosshair} accent="emerald"
-          value={latest?.panel_angle?.toFixed(1) ?? '—'} unit="°"
-        />
-        <StatCard
-          label="Status" icon={Activity} accent="emerald"
-          value={friendlyStatus(latest?.status)} unit=""
-        />
-      </div>
+          {/* Live Stats Grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Power" icon={Zap} accent="amber"
+              value={latest?.watts?.toFixed(1) ?? '—'} unit="W"
+            />
+            <StatCard
+              label="Voltage" icon={Activity} accent="emerald"
+              value={latest?.volts?.toFixed(1) ?? '—'} unit="V"
+            />
+            <StatCard
+              label="Irradiance" icon={Sun} accent="amber"
+              value={latest?.solar_yield?.toFixed(0) ?? '—'} unit="W/m²"
+            />
+            <StatCard
+              label="LDR / Lux" icon={Lightbulb} accent="amber"
+              value={latest?.lux?.toFixed(0) ?? '—'} unit="lux"
+            />
+            <StatCard
+              label="UV Index" icon={SunMedium} accent="amber"
+              value={latest?.uv_index?.toFixed(1) ?? '—'} unit=""
+            />
+            <StatCard
+              label="Wind Speed" icon={Wind} accent="sky"
+              value={latest?.wind_speed?.toFixed(1) ?? '—'} unit="m/s"
+            />
+            <StatCard
+              label="Humidity" icon={Droplets} accent="sky"
+              value={latest?.humidity?.toFixed(1) ?? '—'} unit="%"
+            />
+            <StatCard
+              label="Battery" icon={Battery} accent="emerald"
+              value={latest?.battery_pct?.toFixed(0) ?? '—'} unit="%"
+            />
+            <StatCard
+              label="Pan Angle" icon={Crosshair} accent="emerald"
+              value={latest?.panel_angle?.toFixed(1) ?? '—'} unit="°"
+            />
+            <StatCard
+              label="Status" icon={Activity} accent="emerald"
+              value={friendlyStatus(latest?.status)} unit=""
+            />
+          </div>
 
-      {/* Camera Stream & Snapshots */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
-          <span className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-            {isStreamActive ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                </span>
-                {isCvActive ? 'Live CV Tracking' : 'Live MJPEG Stream'}
-              </>
-            ) : (
-              <>
-                <Camera size={14} className="text-zinc-500" />
-                Latest S3 Snapshot
-              </>
-            )}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={handleRequestSnapshot}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
-            >
-              <Camera size={14} /> Request Snapshot
-            </button>
-            <button
-              onClick={toggleStream}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                isStreamActive && !isCvActive
-                  ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
-                  : 'bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border border-emerald-900/50'
-              }`}
-            >
-              {isStreamActive && !isCvActive ? <><Square size={14} /> Stop Raw</> : <><Play size={14} /> Raw Stream</>}
-            </button>
-            <button
-              onClick={toggleCvStream}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                isCvActive 
-                  ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
-                  : 'bg-indigo-950/50 text-indigo-400 hover:bg-indigo-900/50 border border-indigo-900/50'
-              }`}
-            >
-              {isCvActive ? <><Square size={14} /> Stop CV</> : <><Crosshair size={14} /> Start Tracking</>}
-            </button>
+          {/* Today's Energy Production */}
+          {energyData.length > 0 && (
+            <EnergyProductionChart data={energyData} height={180} />
+          )}
+
+          {/* Local Sensor Nodes (Ported from localhost:5173) */}
+          <LocalSensorNodes />
+
+          {/* Status Footer */}
+          <div className="text-xs text-zinc-600 font-mono mt-4">
+            {lastUpdateTime ? `Last telemetry: ${lastUpdateTime}` : 'Awaiting first telemetry packet…'}
           </div>
         </div>
 
-        <div className="aspect-video bg-black relative flex items-center justify-center">
-          {isStreamActive ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img 
-              src={isCvActive && import.meta.env.VITE_CV_BACKEND_URL 
-                ? `${import.meta.env.VITE_CV_BACKEND_URL}/video_feed` 
-                : import.meta.env.VITE_CAMERA_STREAM_URL} 
-              alt="Live Camera Feed" 
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <>
-              {isLoadingSnapshot && !snapshotUrl ? (
-                <div className="absolute inset-0 flex items-center justify-center animate-pulse bg-zinc-900">
-                  <Camera size={32} className="text-zinc-700" />
-                </div>
-              ) : snapshotUrl ? (
+        {/* =========================================
+            RIGHT COLUMN
+            ========================================= */}
+        <div className="w-full md:w-[350px] lg:w-[400px] xl:w-[450px] flex flex-col gap-6 pointer-events-auto h-full overflow-y-auto pl-2 custom-scrollbar pb-24 mask-image-bottom">
+          
+          {/* Camera Stream & Snapshots */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden shrink-0">
+            <div className="px-3 py-2.5 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50 flex-wrap gap-2">
+              <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 shrink-0">
+                {isStreamActive ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    </span>
+                    {isCvActive ? 'Live CV Tracking' : 'Live MJPEG Stream'}
+                  </>
+                ) : (
+                  <>
+                    <Camera size={12} className="text-zinc-500" />
+                    Latest S3 Snapshot
+                  </>
+                )}
+              </span>
+              <div className="flex gap-1.5 flex-wrap">
+                <button
+                  onClick={toggleStream}
+                  className={`flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded transition-colors ${
+                    isStreamActive && !isCvActive
+                      ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
+                      : 'bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border border-emerald-900/50'
+                  }`}
+                >
+                  {isStreamActive && !isCvActive ? <><Square size={10} /> Stop Raw</> : <><Play size={10} /> Raw Stream</>}
+                </button>
+                <button
+                  onClick={toggleCvStream}
+                  className={`flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded transition-colors ${
+                    isCvActive 
+                      ? 'bg-red-950/50 text-red-400 hover:bg-red-900/50 border border-red-900/50' 
+                      : 'bg-indigo-950/50 text-indigo-400 hover:bg-indigo-900/50 border border-indigo-900/50'
+                  }`}
+                >
+                  {isCvActive ? <><Square size={10} /> Stop CV</> : <><Crosshair size={10} /> Tracking</>}
+                </button>
+              </div>
+            </div>
+
+            <div className="aspect-video bg-black relative flex items-center justify-center">
+              {isStreamActive ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img 
+                  src={isCvActive && import.meta.env.VITE_CV_BACKEND_URL 
+                    ? `${import.meta.env.VITE_CV_BACKEND_URL}/video_feed` 
+                    : import.meta.env.VITE_CAMERA_STREAM_URL} 
+                  alt="Live Camera Feed" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
                 <>
-                  {!imageLoaded && (
+                  {isLoadingSnapshot && !snapshotUrl ? (
                     <div className="absolute inset-0 flex items-center justify-center animate-pulse bg-zinc-900">
-                      <Loader2 size={24} className="text-zinc-500 animate-spin" />
+                      <Camera size={32} className="text-zinc-700" />
                     </div>
-                  )}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={snapshotUrl}
-                    alt="Latest Camera Snapshot"
-                    className={`w-full h-full object-contain transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                    onLoad={() => setImageLoaded(true)}
-                  />
-                  {snapshotWeather && imageLoaded && (
-                    <div className="absolute bottom-2 left-2 right-2 bg-zinc-950/80 border border-zinc-800 text-zinc-300 p-3 rounded-lg backdrop-blur-md z-10 shadow-xl">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="font-semibold text-sm flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full ${
-                            snapshotWeather.weather === 'UNKNOWN' ? 'bg-zinc-500' :
-                            snapshotWeather.weather === 'CLEAR' ? 'bg-amber-400' :
-                            snapshotWeather.weather === 'RAIN' ? 'bg-blue-400' :
-                            'bg-emerald-400'
-                          }`}></span>
-                          Weather: {snapshotWeather.weather}
-                        </span>
-                        <span className="text-xs text-zinc-500 font-mono">
-                          Conf: {(snapshotWeather.confidence * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-400 leading-relaxed italic">{snapshotWeather.reasoning}</p>
+                  ) : snapshotUrl ? (
+                    <>
+                      {!imageLoaded && (
+                        <div className="absolute inset-0 flex items-center justify-center animate-pulse bg-zinc-900">
+                          <Loader2 size={24} className="text-zinc-500 animate-spin" />
+                        </div>
+                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={snapshotUrl}
+                        alt="Latest Camera Snapshot"
+                        className={`w-full h-full object-contain transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => setImageLoaded(true)}
+                      />
+                      {snapshotWeather && imageLoaded && (
+                        <div className="absolute bottom-2 left-2 right-2 bg-zinc-950/80 border border-zinc-800 text-zinc-300 p-2 rounded-md backdrop-blur-md z-10 shadow-xl">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-semibold text-xs flex items-center gap-1.5">
+                              <span className={`h-1.5 w-1.5 rounded-full ${
+                                snapshotWeather.weather === 'UNKNOWN' ? 'bg-zinc-500' :
+                                snapshotWeather.weather === 'CLEAR' ? 'bg-amber-400' :
+                                snapshotWeather.weather === 'RAIN' ? 'bg-blue-400' :
+                                'bg-emerald-400'
+                              }`}></span>
+                              Weather: {snapshotWeather.weather}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              Conf: {(snapshotWeather.confidence * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-relaxed italic line-clamp-2">{snapshotWeather.reasoning}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-zinc-600 text-sm font-mono flex flex-col items-center">
+                      <CameraOff size={24} className="mb-2 opacity-50" />
+                      No snapshots yet
                     </div>
                   )}
                 </>
-              ) : (
-                <div className="text-zinc-600 text-sm font-mono flex flex-col items-center">
-                  <CameraOff size={24} className="mb-2 opacity-50" />
-                  No snapshots yet
-                </div>
               )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Wind Alert Banner */}
-      <AnimatePresence>
-        {latest?.wind_alert && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="rounded-xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300 flex items-center gap-2"
-          >
-            <Wind size={14} />
-            <strong>Wind Alert Active</strong> — Panel is in emergency stow mode.
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Node offline banner */}
-      <AnimatePresence>
-        {wasConnected && !isConnected && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-300 flex items-center gap-2"
-          >
-            <WifiOff size={14} />
-            <strong>Node offline</strong> — Connection lost. Ensure the SOLTRA node is powered on and connected to the internet.
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* No data yet banner */}
-      {!latest && !isLoading && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-6 text-center">
-          <p className="text-sm text-zinc-500 font-mono">
-            No telemetry received yet. Power on your SOLTRA node and ensure it is connected to the internet.
-          </p>
-          <p className="text-xs text-zinc-600 font-mono mt-2">
-            The dashboard will populate automatically once your node begins transmitting.
-          </p>
-        </div>
-      )}
-
-      {/* Local Sensor Nodes (Ported from localhost:5173) */}
-      <LocalSensorNodes />
-
-      {/* Live Charts Row */}
-      {history.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={14} className="text-zinc-500" />
-              <span className="text-sm font-semibold text-zinc-300">Live Telemetry Stream</span>
-              <span className="text-xs font-mono text-zinc-600">
-                ({history.length} samples)
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleTTSReport}
-                disabled={isGenerating}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors disabled:opacity-50"
-              >
-                {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
-                {isGenerating ? 'Generating...' : 'TTS Daily Report'}
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
-              >
-                <Download size={14} /> Export CSV
-              </button>
             </div>
           </div>
-          <div className="grid md:grid-cols-2 gap-4">
+
+          {/* Banners */}
+          <div className="flex flex-col gap-2 shrink-0">
+            <AnimatePresence>
+              {latest?.wind_alert && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="rounded-xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300 flex items-center gap-2"
+                >
+                  <Wind size={14} />
+                  <strong>Wind Alert</strong> — Panel is in emergency stow mode.
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <AnimatePresence>
+              {wasConnected && !isConnected && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-300 flex items-center gap-2"
+                >
+                  <WifiOff size={14} />
+                  <strong>Node offline</strong> — Connection lost. Ensure node is powered on.
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {!latest && !isLoading && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-4 text-center">
+                <p className="text-xs text-zinc-500 font-mono">
+                  No telemetry received yet.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Live Charts Row */}
+          {history.length > 0 && (
+            <div className="flex flex-col gap-3 shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={14} className="text-zinc-500" />
+                  <span className="text-sm font-semibold text-zinc-300">Telemetry Stream</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleTTSReport}
+                    disabled={isGenerating}
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded transition-colors disabled:opacity-50"
+                  >
+                    {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
+                    {isGenerating ? 'Gen...' : 'TTS'}
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+                  >
+                    <Download size={12} /> CSV
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
             <TelemetryAreaChart
               data={history}
               metric="solar_yield"
@@ -683,27 +693,17 @@ export function HomeownerOverlay({ nodeId, nodeMac, nodeLabel, siteName, siteTim
               color="#10b981"
               gradientId="grad-battery"
             />
-          </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manual Control Panel */}
+          <ManualControlPanel publish={publish} isConnected={isConnected} />
         </div>
-      )}
-
-      {/* Today's Energy Production */}
-      {energyData.length > 0 && (
-        <EnergyProductionChart data={energyData} height={180} />
-      )}
-
-      {/* Manual Control Panel */}
-      <ManualControlPanel publish={publish} isConnected={isConnected} />
-
-      {/* Status Footer */}
-      <div className="text-xs text-zinc-600 font-mono">
-        {lastUpdateTime ? `Last telemetry: ${lastUpdateTime}` : 'Awaiting first telemetry packet…'}
-        {' · '}Node: {nodeMac}
       </div>
-
+      
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
-      </div>
     </div>
   )
 }
