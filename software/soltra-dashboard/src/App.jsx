@@ -4,7 +4,6 @@ import { OrbitControls } from '@react-three/drei';
 import './App.css';
 import DigitalTwinEnv from './components/DigitalTwinEnv';
 import VrmAvatar from './components/VrmAvatar';
-import hubVideo from './assets/main1.mp4';
 
 /* ─── Error Boundary: isolates Canvas crashes from the UI overlay ─── */
 class CanvasErrorBoundary extends Component {
@@ -91,16 +90,6 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
-      {/* ── Background Video ── */}
-      <video 
-        src={hubVideo} 
-        autoPlay 
-        loop 
-        muted 
-        playsInline 
-        className="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0"
-      />
-
       {/* Global CRT Scanline Overlay */}
       <div className="scanline-overlay" />
 
