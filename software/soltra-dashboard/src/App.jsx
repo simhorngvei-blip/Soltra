@@ -1,9 +1,10 @@
 import { Suspense, useState, Component } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Loader } from '@react-three/drei';
+import { OrbitControls, useProgress } from '@react-three/drei';
 import './App.css';
 import DigitalTwinEnv from './components/DigitalTwinEnv';
 import VrmAvatar from './components/VrmAvatar';
+import CubeLoader from './components/ui/cube-loader';
 
 /* ─── Error Boundary: isolates Canvas crashes from the UI overlay ─── */
 class CanvasErrorBoundary extends Component {
@@ -80,6 +81,16 @@ function Scene({ animationName, expressionName, shaderMode, isTalking, audioAnal
   );
 }
 
+function CustomLoader() {
+  const { active } = useProgress();
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black">
+      <CubeLoader />
+    </div>
+  );
+}
+
 /* ─── Main App ─────────────────────────────────────────────────────── */
 export default function App() {
   const [currentAnimation] = useState('idle');
@@ -111,10 +122,7 @@ export default function App() {
         </Canvas>
       </CanvasErrorBoundary>
 
-      <Loader 
-        containerStyles={{ background: '#000' }} 
-        dataStyles={{ color: '#00d9ff', fontFamily: "'Anton', sans-serif" }} 
-      />
+      <CustomLoader />
     </div>
   );
 }
