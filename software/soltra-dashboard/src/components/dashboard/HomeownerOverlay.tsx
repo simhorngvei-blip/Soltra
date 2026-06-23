@@ -345,8 +345,8 @@ export function HomeownerOverlay({ nodeId, nodeMac, nodeLabel, siteName, siteTim
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={20} className="text-zinc-500 animate-spin" />
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        <Loader2 size={32} className="text-emerald-500 animate-spin" />
       </div>
     )
   }
@@ -354,14 +354,14 @@ export function HomeownerOverlay({ nodeId, nodeMac, nodeLabel, siteName, siteTim
   // Supabase fetch error
   if (error) {
     return (
-      <div className="p-6 flex items-center justify-center h-[60vh]">
-        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-10 text-center max-w-md space-y-4">
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        <div className="rounded-xl border border-red-900/50 bg-red-950/80 p-10 text-center max-w-md space-y-4 pointer-events-auto backdrop-blur-md">
           <AlertCircle className="mx-auto text-red-400" size={32} />
           <h2 className="text-lg font-semibold text-red-400">Unable to load telemetry</h2>
-          <p className="text-sm text-zinc-500 font-mono">{error}</p>
+          <p className="text-sm text-zinc-300 font-mono break-words">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-xs font-mono text-zinc-300 transition-colors"
+            className="rounded-lg border border-red-700 bg-red-900 hover:bg-red-800 px-4 py-2 text-xs font-mono text-red-100 transition-colors"
           >
             ↺ Retry
           </button>

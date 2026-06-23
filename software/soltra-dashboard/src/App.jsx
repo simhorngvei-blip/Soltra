@@ -124,7 +124,7 @@ export default function App() {
       </CanvasErrorBoundary>
 
       <HomeownerOverlay 
-        nodeId="node-1" 
+        nodeId="f7b3d85b-e185-4553-8545-efaefec65751" 
         nodeMac="00:1A:2B:3C:4D:5E" 
         nodeLabel="Primary Array" 
         siteName="Soltra HQ" 
