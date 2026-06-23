@@ -1,6 +1,6 @@
 import { Suspense, useState, Component } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Loader } from '@react-three/drei';
 import './App.css';
 import DigitalTwinEnv from './components/DigitalTwinEnv';
 import VrmAvatar from './components/VrmAvatar';
@@ -110,6 +110,11 @@ export default function App() {
           />
         </Canvas>
       </CanvasErrorBoundary>
+
+      <Loader 
+        containerStyles={{ background: '#000' }} 
+        dataStyles={{ color: '#00d9ff', fontFamily: "'Anton', sans-serif" }} 
+      />
     </div>
   );
 }
