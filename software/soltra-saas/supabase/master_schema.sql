@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS public.telemetry (
   irradiance  REAL,        -- Solar irradiance (W/m²)
   humidity    REAL,        -- Relative humidity (%) from BME280
   lux         REAL,        -- Illuminance (lux) from TSL2591
+  ldr         REAL,        -- Light Dependent Resistor value
   uv_index    REAL,        -- UV Index from LTR390
   battery_pct REAL,        -- Battery percentage (0-100)
   wind_alert  BOOLEAN     DEFAULT FALSE,

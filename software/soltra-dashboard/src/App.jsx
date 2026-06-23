@@ -314,7 +314,7 @@ export default function App() {
         loop 
         muted 
         playsInline 
-        className="absolute inset-0 w-full h-full object-cover opacity-50 z-0"
+        className="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0"
       />
 
       {/* Global CRT Scanline Overlay */}
@@ -325,10 +325,8 @@ export default function App() {
         <Canvas
           shadows
           camera={{ position: [0, 0.8, 5], fov: 50 }}
-          style={{ position: 'absolute', inset: 0, zIndex: 1 }}
-          onCreated={({ gl }) => {
-            gl.setClearColor('#000300'); // Very dark green/black
-          }}
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}
+          gl={{ antialias: true, alpha: true }}
         >
           <Scene 
             animationName={currentAnimation} 

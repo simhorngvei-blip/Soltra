@@ -13,7 +13,7 @@ export type TelemetrySnapshot = NormalizedTelemetry
 
 interface TelemetryChartProps {
   data: TelemetrySnapshot[]
-  metric: 'solar_yield' | 'wind_speed' | 'panel_angle'
+  metric: keyof NormalizedTelemetry
   title: string
   unit: string
   color: string

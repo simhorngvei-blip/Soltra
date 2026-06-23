@@ -9,9 +9,10 @@ import { ManualControlPanel } from '@/components/controls/manual-control-panel'
 import { TelemetryAreaChart } from '@/components/charts/telemetry-chart'
 import { EnergyProductionChart } from '@/components/charts/energy-chart'
 import { ToastContainer, useToast } from '@/components/ui/toast'
-import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2, AlertCircle, Camera, CameraOff, Video, Play, Square, Download, Volume2 } from 'lucide-react'
+import { Sun, Wind, Crosshair, Zap, Wifi, WifiOff, TrendingUp, Loader2, AlertCircle, Camera, CameraOff, Video, Play, Square, Download, Volume2, Battery, Droplets, Activity, Gauge, SunMedium, Lightbulb } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTTS } from '@/hooks/useTTS'
+import { LocalSensorNodes } from '@/components/dashboard/local-sensor-nodes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -249,22 +250,20 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
   }
 
   const toggleCvStream = async () => {
-    const cvUrl = process.env.NEXT_PUBLIC_CV_BACKEND_URL
-    if (!cvUrl) {
-      toast('NEXT_PUBLIC_CV_BACKEND_URL not configured.', 'error')
-      return
-    }
-
     const newStatus = !isCvActive
     try {
-      const res = await fetch(`${cvUrl}/api/track/${newStatus ? 'start' : 'stop'}`, {
+      // Call our server-side proxy to avoid CORS/ngrok preflight issues
+      const res = await fetch('/api/cv', {
         method: 'POST',
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: newStatus ? 'start' : 'stop' }),
       })
-      if (!res.ok) throw new Error('CV backend request failed')
-      
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: 'Request failed' }))
+        toast(error ?? 'Could not contact CV Backend. Is the tunnel running?', 'error')
+        return
+      }
+
       setIsCvActive(newStatus)
       if (newStatus && !isStreamActive) {
         setIsStreamActive(true) // Render the video tag
@@ -281,19 +280,35 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
       toast('No telemetry data available to export.', 'error')
       return
     }
-    
     // Create CSV header
-    const headers = ['Timestamp', 'Irradiance (W/m²)', 'Wind Speed (m/s)', 'Panel Angle (°)', 'Status']
+    const headers = [
+      'Timestamp',
+      'Energy Generation (W)',
+      'Panel Voltage (V)',
+      'Irradiance (W/m²)',
+      'Wind Speed (m/s)',
+      'Panel Angle (°)',
+      'LDR / Lux',
+      'UV Index',
+      'Humidity (%)',
+      'Battery (%)',
+      'Status'
+    ]
     
     // Create CSV rows
     const rows = history.map(row => [
-      new Date(row.timestamp).toLocaleString(),
+      row.recorded_at ? new Date(row.recorded_at).toLocaleString() : '',
+      row.watts?.toFixed(2) ?? '',
+      row.volts?.toFixed(2) ?? '',
       row.solar_yield?.toFixed(2) ?? '',
       row.wind_speed?.toFixed(2) ?? '',
       row.panel_angle?.toFixed(2) ?? '',
+      row.lux?.toString() ?? '',
+      row.uv_index?.toString() ?? '',
+      row.humidity?.toString() ?? '',
+      row.battery_pct?.toFixed(1) ?? '',
       row.status ?? ''
     ])
-    
     // Join all together
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
     
@@ -399,21 +414,45 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
       </div>
 
       {/* Live Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <StatCard
+          label="Power" icon={Zap} accent="amber"
+          value={latest?.watts?.toFixed(1) ?? '—'} unit="W"
+        />
+        <StatCard
+          label="Voltage" icon={Activity} accent="emerald"
+          value={latest?.volts?.toFixed(1) ?? '—'} unit="V"
+        />
         <StatCard
           label="Irradiance" icon={Sun} accent="amber"
           value={latest?.solar_yield?.toFixed(0) ?? '—'} unit="W/m²"
+        />
+        <StatCard
+          label="LDR / Lux" icon={Lightbulb} accent="amber"
+          value={latest?.lux?.toFixed(0) ?? '—'} unit="lux"
+        />
+        <StatCard
+          label="UV Index" icon={SunMedium} accent="amber"
+          value={latest?.uv_index?.toFixed(1) ?? '—'} unit=""
         />
         <StatCard
           label="Wind Speed" icon={Wind} accent="sky"
           value={latest?.wind_speed?.toFixed(1) ?? '—'} unit="m/s"
         />
         <StatCard
+          label="Humidity" icon={Droplets} accent="sky"
+          value={latest?.humidity?.toFixed(1) ?? '—'} unit="%"
+        />
+        <StatCard
+          label="Battery" icon={Battery} accent="emerald"
+          value={latest?.battery_pct?.toFixed(0) ?? '—'} unit="%"
+        />
+        <StatCard
           label="Pan Angle" icon={Crosshair} accent="emerald"
           value={latest?.panel_angle?.toFixed(1) ?? '—'} unit="°"
         />
         <StatCard
-          label="Status" icon={Zap} accent="emerald"
+          label="Status" icon={Activity} accent="emerald"
           value={friendlyStatus(latest?.status)} unit=""
         />
       </div>
@@ -570,6 +609,9 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
         </div>
       )}
 
+      {/* Local Sensor Nodes (Ported from localhost:5173) */}
+      <LocalSensorNodes />
+
       {/* Live Charts Row */}
       {history.length > 0 && (
         <div>
@@ -615,6 +657,30 @@ export function HomeownerClient({ nodeId, nodeMac, nodeLabel, siteName, siteTime
               color="#38bdf8"
               gradientId="grad-wind"
               alertThreshold={12.5}
+            />
+            <TelemetryAreaChart
+              data={history}
+              metric="uv_index"
+              title="UV Index"
+              unit=""
+              color="#d946ef"
+              gradientId="grad-uv"
+            />
+            <TelemetryAreaChart
+              data={history}
+              metric="lux"
+              title="LDR / Lux"
+              unit="lux"
+              color="#eab308"
+              gradientId="grad-lux"
+            />
+            <TelemetryAreaChart
+              data={history}
+              metric="battery_pct"
+              title="Battery"
+              unit="%"
+              color="#10b981"
+              gradientId="grad-battery"
             />
           </div>
         </div>

@@ -5,3 +5,6 @@ paho-mqtt
 
 Flask
 flask-cors
+
+inference-sdk
+python-dotenv

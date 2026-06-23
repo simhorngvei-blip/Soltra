@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
     battery_pct,
     uv_index,
     lux,
+    ldr,
     irradiance_wm2,
     humidity_pct,
     power_watts,
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
     battery_pct?:    number
     uv_index?:       number
     lux?:            number
+    ldr?:            number
     irradiance_wm2?: number
     humidity_pct?:   number
     power_watts?:    number
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
       irradiance:    irradiance_wm2 ?? null,
       humidity:      humidity_pct   ?? null,
       lux:           lux            ?? null,
+      ldr:           ldr            ?? null,
       uv_index:      uv_index       ?? null,
       battery_pct:   battery_pct    ?? null,
       wind_alert:    wind_alert     ?? false,

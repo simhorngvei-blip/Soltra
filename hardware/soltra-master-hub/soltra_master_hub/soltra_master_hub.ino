@@ -32,6 +32,14 @@
 #define LATITUDE  3.140853   // ← your latitude
 #define LONGITUDE 101.693207 // ← your longitude
 //
+//
+// STEP 6 — LDR TEST MODE (INDOORS/RAINY DAY)
+//   Change this to 1 to force the tracker to use the LDR light sensors
+//   and ignore Ephemeris/Sun-position, Night-time reset, and Low-light standby.
+//   Useful for testing auto-tracking with a flashlight indoors.
+//
+#define FORCE_LDR_TEST_MODE 1
+//
 // ═════════════════════════════════════════════
 // END CONFIG — do not edit below unless you know what you're doing
 // ═════════════════════════════════════════════
@@ -139,7 +147,7 @@ const char* root_ca = \
 
 const unsigned long PUB_INTERVAL  = 5000;
 const unsigned long DEC_INTERVAL  = 1000;
-const int           WIND_THRESH   = 18000;
+const int           WIND_THRESH   = 4000; // Adjusted for high-pass delta filtering
 
 // ─── HARDWARE PINS (Heltec V3 ESP32-S3 Safe Pins) ────────────────────────────
 #define VEXT_PIN 36
@@ -158,13 +166,16 @@ volatile float g_humidity = 0.0f;
 // ─── SHARED STATE (mutex-protected) ──────────────────────────────────────────
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
-volatile int16_t g_AcX = 0, g_AcY = 0;
+volatile int16_t g_max_vib = 0;
 volatile float   g_watts     = 847.3f;
 volatile float   g_volts     = 240.2f;
 volatile float   g_pan_angle = 184.2f;
 volatile float   g_tilt_angle = 45.0f;
 volatile float   g_irradiance = 0.0f;
 volatile int     g_ldr_values[4] = {0, 0, 0, 0};
+volatile uint32_t g_node_lux[4]  = {0, 0, 0, 0};
+volatile float   g_node_uv[4]   = {0, 0, 0, 0};
+volatile float   g_node_bat[4]  = {0, 0, 0, 0};
 volatile uint32_t g_lux = 0;
 volatile float   g_battery_v = 0.0f;
 volatile float   g_uv_index = 0.0f;
@@ -195,6 +206,13 @@ typedef struct {
   float pan_angle;
   float tilt_angle;
 } MotorTelemetryPkt;
+
+typedef struct {
+  uint8_t magic; // 0x99
+  uint8_t device_type; // 5
+  float pan_delta;
+  float tilt_delta;
+} CameraAIPkt;
 
 typedef struct {
   uint8_t magic; // 0x99
@@ -251,9 +269,15 @@ void onRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
   if (len == sizeof(SensorPkt)) {
     memcpy(&rxPkt, data, sizeof(rxPkt));
     portENTER_CRITICAL_ISR(&mux);
-    if (rxPkt.node_id >= 1 && rxPkt.node_id <= 4)
-      g_ldr_values[rxPkt.node_id - 1] = rxPkt.ldr_value;
-    g_irradiance = (float)rxPkt.ldr_value;
+    if (rxPkt.node_id >= 1 && rxPkt.node_id <= 4) {
+      int idx = rxPkt.node_id - 1;
+      g_ldr_values[idx] = rxPkt.ldr_value;
+      g_node_lux[idx]   = rxPkt.lux;
+      g_node_uv[idx]    = rxPkt.uv_index;
+      g_node_bat[idx]   = rxPkt.battery_v;
+    }
+    // Use node 1 as the primary irradiance/lux source (or aggregate)
+    g_irradiance = (float)rxPkt.lux * 0.0079f;
     g_lux = rxPkt.lux;
     g_battery_v = rxPkt.battery_v;
     g_uv_index = rxPkt.uv_index;
@@ -265,6 +289,23 @@ void onRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
     g_pan_angle  = rxMotorPkt.pan_angle;
     g_tilt_angle = rxMotorPkt.tilt_angle;
     portEXIT_CRITICAL_ISR(&mux);
+  } else if (len == sizeof(CameraAIPkt) && data[0] == 0x99 && data[1] == 5) {
+    CameraAIPkt aiPkt;
+    memcpy(&aiPkt, data, sizeof(aiPkt));
+    portENTER_CRITICAL_ISR(&mux);
+    g_ai_override = true;
+    strncpy((char*)g_ai_mode, "EDGE_AI", 15);
+    g_manual_timeout = millis() + 5000;
+    portEXIT_CRITICAL_ISR(&mux);
+    
+    // We send pan/tilt directly just like the MQTT callback does
+    bool pan_right  = aiPkt.pan_delta  >  0.1f;
+    bool pan_left   = aiPkt.pan_delta  < -0.1f;
+    bool tilt_up    = aiPkt.tilt_delta >  0.1f;
+    bool tilt_down  = aiPkt.tilt_delta < -0.1f;
+
+    if (pan_right) routeMotor(0); else if (pan_left) routeMotor(1); else routeMotor(2);
+    if (tilt_up)   routeMotor(3); else if (tilt_down) routeMotor(4); else routeMotor(5);
   }
 }
 
@@ -310,37 +351,35 @@ void mqttCb(char* topic, byte* payload, unsigned int len) {
       int tilt_idx = msg.indexOf("\"tilt_delta\":");
       if (tilt_idx >= 0) tilt_delta = msg.substring(tilt_idx + 13).toFloat();
 
-      // Map deltas → motor commands (integer 1–9, centre 5 = hold)
-      // Pan:  positive → CW (cmd 6), negative → CCW (cmd 4)
-      // Tilt: positive → Up  (cmd 8), negative → Down (cmd 2)
-      // Combined diagonals: 7/9/1/3
-      // No-op when both are zero: cmd 5 (stop)
       bool pan_right  = pan_delta  >  0.1f;
       bool pan_left   = pan_delta  < -0.1f;
       bool tilt_up    = tilt_delta >  0.1f;
       bool tilt_down  = tilt_delta < -0.1f;
 
-      int cmd = 5; // hold
-      if      ( pan_right && tilt_up   ) cmd = 9;
-      else if ( pan_right && tilt_down ) cmd = 3;
-      else if ( pan_left  && tilt_up   ) cmd = 7;
-      else if ( pan_left  && tilt_down ) cmd = 1;
-      else if ( pan_right              ) cmd = 6;
-      else if ( pan_left               ) cmd = 4;
-      else if ( tilt_up                ) cmd = 8;
-      else if ( tilt_down              ) cmd = 2;
+      portENTER_CRITICAL_ISR(&mux);
+      g_ai_override = true;
+      strncpy((char*)g_ai_mode, "CV_SUN_TRACK", 15);
+      portEXIT_CRITICAL_ISR(&mux);
+      g_manual_timeout = millis() + 1000; // auto-stop after 1s if no new CV cmd
 
-      if (cmd != 5) {
-        portENTER_CRITICAL_ISR(&mux);
-        g_ai_override = true;
-        strncpy((char*)g_ai_mode, "CV_SUN_TRACK", 15);
-        portEXIT_CRITICAL_ISR(&mux);
-        g_manual_timeout = millis() + 1000; // auto-stop after 1s if no new CV cmd
-        routeMotor(cmd);
-        Serial.printf("[CV] pan=%.2f tilt=%.2f → motor cmd %d\n", pan_delta, tilt_delta, cmd);
+      // Dispatch sequentially: prioritize Pan.
+      if (pan_right || pan_left) {
+        if (pan_right) routeMotor(5);
+        else routeMotor(4);
+        delay(300);    // Hold movement
+        routeMotor(6); // Stop pan
+        delay(500);    // Wait for system to settle
+      } else if (tilt_up || tilt_down) {
+        if (tilt_up) routeMotor(1);
+        else routeMotor(2);
+        delay(300);    // Hold movement
+        routeMotor(3); // Stop tilt
+        delay(500);    // Wait for system to settle
       } else {
-        Serial.printf("[CV] Sun centred — no motor command needed\n");
+        routeMotor(9); // Stop all
       }
+
+      Serial.printf("[CV] pan=%.2f tilt=%.2f\n", pan_delta, tilt_delta);
       return;
     }
 
@@ -361,7 +400,69 @@ void mqttCb(char* topic, byte* payload, unsigned int len) {
 }
 
 // ─── ROUTE MOTOR CMD ─────────────────────────────────────────────────────────
+// BUG 2 FIX: Dedup guard is now timeout-aware.
+// Same command is suppressed only within DEDUP_MS of the previous send.
+// This allows a stop command to retry on the next decision-engine cycle
+// if the first packet was lost over ESP-NOW — preventing runaway motor.
 void routeMotor(int cmd) {
+  static int last_pan_cmd   = -1;
+  static int last_tilt_cmd  = -1;
+  static unsigned long last_pan_time  = 0;
+  static unsigned long last_tilt_time = 0;
+  const unsigned long DEDUP_MS = 900; // Suppress repeats only within 900ms
+  
+  // SOFT CAP: Prevent continuous twitching by rate-limiting direction changes
+  // STOP commands (3, 6, 9) are always allowed instantly for safety.
+  const unsigned long SOFT_CAP_MS = 1000;
+  static unsigned long last_pan_change  = 0;
+  static unsigned long last_tilt_change = 0;
+
+  unsigned long now_ms = millis();
+
+  bool is_pan = (cmd == 4 || cmd == 5 || cmd == 6);
+  bool is_tilt = (cmd == 1 || cmd == 2 || cmd == 3);
+  bool is_stop = (cmd == 3 || cmd == 6 || cmd == 9);
+
+  // Sequential Movement Enforcement: Stop the other axis before moving
+  if (is_pan && !is_stop && last_tilt_cmd != 3) {
+    txPkt.command = 3;
+    esp_now_send(MOTOR_MAC, (uint8_t*)&txPkt, sizeof(txPkt));
+    // Serial.println("[ESP-NOW] Sequential lock: Tilt STOP forced");
+    last_tilt_cmd = 3;
+    last_tilt_time = now_ms;
+    delay(50);
+  } else if (is_tilt && !is_stop && last_pan_cmd != 6) {
+    txPkt.command = 6;
+    esp_now_send(MOTOR_MAC, (uint8_t*)&txPkt, sizeof(txPkt));
+    // Serial.println("[ESP-NOW] Sequential lock: Pan STOP forced");
+    last_pan_cmd = 6;
+    last_pan_time = now_ms;
+    delay(50);
+  }
+
+  if (is_pan) {
+    if (cmd == last_pan_cmd && (now_ms - last_pan_time) < DEDUP_MS) return; // Dedup
+    if (!is_stop && cmd != last_pan_cmd && (now_ms - last_pan_change) < SOFT_CAP_MS) {
+      cmd = 6; // Force STOP during the cooldown period instead of continuing old movement
+      is_stop = true;
+    }
+    if (cmd != last_pan_cmd) last_pan_change = now_ms;
+    last_pan_cmd  = cmd;
+    last_pan_time = now_ms;
+  } else if (is_tilt) {
+    if (cmd == last_tilt_cmd && (now_ms - last_tilt_time) < DEDUP_MS) return; // Dedup
+    if (!is_stop && cmd != last_tilt_cmd && (now_ms - last_tilt_change) < SOFT_CAP_MS) {
+      cmd = 3; // Force STOP during the cooldown period instead of continuing old movement
+      is_stop = true;
+    }
+    if (cmd != last_tilt_cmd) last_tilt_change = now_ms;
+    last_tilt_cmd  = cmd;
+    last_tilt_time = now_ms;
+  } else if (cmd == 9) {
+    last_pan_cmd = 6; last_pan_time = now_ms; last_pan_change = now_ms;
+    last_tilt_cmd = 3; last_tilt_time = now_ms; last_tilt_change = now_ms;
+  }
+
   txPkt.command = cmd;
   esp_err_t r = esp_now_send(MOTOR_MAC, (uint8_t*)&txPkt, sizeof(txPkt));
   Serial.printf("[ESP-NOW] Motor cmd %d → %s\n", cmd, r == ESP_OK ? "OK" : "FAIL");
@@ -404,6 +505,13 @@ void publishTelemetry() {
   hum = g_humidity;
   rx_lux = g_lux; rx_bat_v = g_battery_v; rx_uv = g_uv_index;
   wa = g_wind; no_ = g_online;
+  uint16_t ldr_t = g_ldr_values[0], ldr_r = g_ldr_values[1], ldr_b = g_ldr_values[2], ldr_l = g_ldr_values[3];
+  // Per-node full readings
+  uint32_t n_lux[4];  float n_uv[4]; float n_bat[4]; int n_ldr[4];
+  for (int i = 0; i < 4; i++) {
+    n_lux[i] = g_node_lux[i]; n_uv[i] = g_node_uv[i];
+    n_bat[i] = g_node_bat[i]; n_ldr[i] = g_ldr_values[i];
+  }
   strncpy(st, (const char*)g_status, 24);
   portEXIT_CRITICAL(&mux);
 
@@ -417,15 +525,25 @@ void publishTelemetry() {
 
   float irradiance_wm2 = (float)rx_lux * 0.0079f;
 
-  char buf[512];
+  char buf[900];
   snprintf(buf, sizeof(buf),
     "{\"node_mac\":\"%s\",\"battery_pct\":%d,\"uv_index\":%.1f,\"lux\":%u,"
     "\"irradiance_wm2\":%.1f,\"humidity_pct\":%.1f,\"power_watts\":%.1f,\"panel_volts\":%.1f,"
     "\"wind_speed_ms\":%.1f,\"wind_alert\":%s,\"pan_angle_deg\":%.1f,\"tilt_angle_deg\":%.1f,"
+    "\"ldr_top\":%u,\"ldr_right\":%u,\"ldr_bottom\":%u,\"ldr_left\":%u,"
+    "\"nodes\":[{\"id\":1,\"ldr\":%d,\"lux\":%u,\"uv\":%.1f,\"bat\":%.2f},"
+    "{\"id\":2,\"ldr\":%d,\"lux\":%u,\"uv\":%.1f,\"bat\":%.2f},"
+    "{\"id\":3,\"ldr\":%d,\"lux\":%u,\"uv\":%.1f,\"bat\":%.2f},"
+    "{\"id\":4,\"ldr\":%d,\"lux\":%u,\"uv\":%.1f,\"bat\":%.2f}],"
     "\"status\":\"%s\"}",
     mac.c_str(), battery_pct, rx_uv, rx_lux,
     irradiance_wm2, hum, wa_watts, vo_volts,
     ws, wa ? "true" : "false", pa_pan, ta_tilt,
+    ldr_t, ldr_r, ldr_b, ldr_l,
+    n_ldr[0], n_lux[0], n_uv[0], n_bat[0],
+    n_ldr[1], n_lux[1], n_uv[1], n_bat[1],
+    n_ldr[2], n_lux[2], n_uv[2], n_bat[2],
+    n_ldr[3], n_lux[3], n_uv[3], n_bat[3],
     st);
 
   Serial.print("[MQTT] TX → "); Serial.println(buf);
@@ -446,13 +564,27 @@ void publishTelemetry() {
 }
 
 // ─── DECISION ENGINE (Core 1) ────────────────────────────────────────────────
-void readMPU() {
+void pollVibration() {
   Wire.beginTransmission(MPU_ADDR); Wire.write(0x3B); Wire.endTransmission(false);
   Wire.requestFrom(MPU_ADDR, 6, true);
   int16_t x = Wire.read() << 8 | Wire.read();
   int16_t y = Wire.read() << 8 | Wire.read();
   Wire.read(); Wire.read();
-  portENTER_CRITICAL(&mux); g_AcX = x; g_AcY = y; portEXIT_CRITICAL(&mux);
+  
+  static int16_t avg_x = x;
+  static int16_t avg_y = y;
+  
+  // High-pass filter: subtract low-pass (gravity) from raw reading
+  avg_x = (avg_x * 7 + x) / 8;
+  avg_y = (avg_y * 7 + y) / 8;
+  
+  int16_t dx = abs(x - avg_x);
+  int16_t dy = abs(y - avg_y);
+  int16_t vib = (dx > dy) ? dx : dy;
+  
+  portENTER_CRITICAL(&mux);
+  if (vib > g_max_vib) g_max_vib = vib;
+  portEXIT_CRITICAL(&mux);
 }
 
 // ─── INLINE SOLAR POSITION (no external library needed) ─────────────────────
@@ -489,22 +621,34 @@ void calcSolarPosition(int year, int month, int day, int hour, int minute, int s
 
 void decisionEngine() {
   RtcDateTime now = Rtc.GetDateTime();
-  readMPU();
+  // pollVibration() is called continuously by radioTask
   g_humidity = bme.readHumidity();
 
   double sun_azimuth = 0.0, sun_elevation = 0.0;
   calcSolarPosition(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0,
                     LATITUDE, LONGITUDE, sun_azimuth, sun_elevation);
 
+  int current_vib = 0;
+  
   portENTER_CRITICAL(&mux);
-  bool wind = (abs(g_AcX) > WIND_THRESH || abs(g_AcY) > WIND_THRESH);
+  current_vib = g_max_vib;
+  bool wind = (current_vib > WIND_THRESH);
+  g_max_vib = 0; // Reset peak detector for the next interval
   int  hr   = now.Hour();
   g_wind = wind; g_hour = hr;
+  g_ws = (float)current_vib / 150.0f; // Scale raw vibration down to a dashboard-friendly "m/s" number
 
-  int left_ldr   = (g_ldr_values[0] + g_ldr_values[2]) / 2;
-  int right_ldr  = (g_ldr_values[1] + g_ldr_values[3]) / 2;
-  int top_ldr    = (g_ldr_values[0] + g_ldr_values[1]) / 2;
-  int bottom_ldr = (g_ldr_values[2] + g_ldr_values[3]) / 2;
+  // BUG 4 FIX: Capture raw per-node LDR values alongside averaged groups
+  // so we can log them and verify deltas are crossing the threshold.
+  int n0 = g_ldr_values[0]; // Node 1 — top-left
+  int n1 = g_ldr_values[1]; // Node 2 — top-right
+  int n2 = g_ldr_values[2]; // Node 3 — bottom-left
+  int n3 = g_ldr_values[3]; // Node 4 — bottom-right
+
+  int left_ldr   = (n0 + n2) / 2;  // Nodes 1 + 3
+  int right_ldr  = (n1 + n3) / 2;  // Nodes 2 + 4
+  int top_ldr    = (n0 + n1) / 2;  // Nodes 1 + 2
+  int bottom_ldr = (n2 + n3) / 2;  // Nodes 3 + 4
 
   bool manual_override = (millis() < g_manual_timeout);
   bool ai_over = g_ai_override;
@@ -513,8 +657,17 @@ void decisionEngine() {
 
   bool use_ephemeris = false;
   bool is_stow = false;
+  bool is_standby = false;
 
-  if (wind || (ai_over && strcmp(ai_md, "stow") == 0)) {
+  if (FORCE_LDR_TEST_MODE) {
+    strncpy((char*)g_status, "ldr_test_mode", 24);
+    use_ephemeris = false;
+    // BUG 4 FIX: In test mode, if no node has sent yet, show a clear warning
+    // instead of silently failing. g_online will be true once any node sends.
+    if (!g_online) {
+      strncpy((char*)g_status, "ldr_test_no_nodes", 24);
+    }
+  } else if (wind || (ai_over && strcmp(ai_md, "stow") == 0)) {
     strncpy((char*)g_status, ai_over ? "ai_stow" : "wind_stow", 24);
     is_stow = true;
   } else if (manual_override) {
@@ -523,6 +676,9 @@ void decisionEngine() {
     strncpy((char*)g_status, "night_reset", 24);
   } else if (!g_online) {
     strncpy((char*)g_status, "sensor_offline", 24);
+  } else if (g_irradiance < 10.0 && !ai_over) {
+    strncpy((char*)g_status, "low_light_standby", 24);
+    is_standby = true;
   } else if (ai_over && strcmp(ai_md, "ephemeris") == 0) {
     use_ephemeris = true;
     strncpy((char*)g_status, "ai_ephemeris", 24);
@@ -536,31 +692,80 @@ void decisionEngine() {
   }
   portEXIT_CRITICAL(&mux);
 
-  if (is_stow) {
+  if (is_stow || is_standby) {
     routeMotor(6); delay(20); routeMotor(3);
-  } else if (!is_stow && hr >= 7 && hr < 19 && g_online && !manual_override) {
-    int threshold = 500;
+  } else if (!is_stow && !is_standby && g_online && !manual_override && (FORCE_LDR_TEST_MODE || (hr >= 7 && hr < 19))) {
+    int threshold = 350;
     if (use_ephemeris) {
-      if (sun_azimuth > g_pan_angle + 2.0)       routeMotor(5);
-      else if (sun_azimuth < g_pan_angle - 2.0)  routeMotor(4);
-      else                                         routeMotor(6);
-      delay(50);
-      if (sun_elevation > g_tilt_angle + 2.0)     routeMotor(1);
-      else if (sun_elevation < g_tilt_angle - 2.0) routeMotor(2);
-      else                                           routeMotor(3);
+      bool pan_needs_move = false;
+      if (sun_azimuth > g_pan_angle + 2.0)       { routeMotor(5); pan_needs_move = true; }
+      else if (sun_azimuth < g_pan_angle - 2.0)  { routeMotor(4); pan_needs_move = true; }
+
+      if (!pan_needs_move) {
+        if (sun_elevation > g_tilt_angle + 2.0) {
+          routeMotor(1);
+          delay(300); routeMotor(3); delay(500);
+        } else if (sun_elevation < g_tilt_angle - 2.0) {
+          routeMotor(2);
+          delay(300); routeMotor(3); delay(500);
+        } else {
+          routeMotor(9);
+        }
+      } else {
+        delay(300); routeMotor(6); delay(500);
+      }
     } else {
-      if (left_ldr - right_ldr > threshold)       routeMotor(4);
-      else if (right_ldr - left_ldr > threshold)  routeMotor(5);
-      else                                          routeMotor(6);
-      delay(50);
-      if (top_ldr - bottom_ldr > threshold)       routeMotor(1);
-      else if (bottom_ldr - top_ldr > threshold)  routeMotor(2);
-      else                                          routeMotor(3);
+      // BUG 4 DIAGNOSTIC: Log raw deltas every cycle so you can confirm
+      // the flashlight is producing a delta above threshold (350).
+      int pan_delta  = left_ldr - right_ldr;  // >0 = light is more on the left
+      int tilt_delta = top_ldr  - bottom_ldr; // >0 = light is more on the top
+      Serial.printf("[LDR] N1=%d N2=%d N3=%d N4=%d | L=%d R=%d T=%d B=%d | dPan=%d dTilt=%d | Vib=%d\n",
+        n0, n1, n2, n3, left_ldr, right_ldr, top_ldr, bottom_ldr, pan_delta, tilt_delta, current_vib);
+
+      // Deadband / Hysteresis
+      static int current_pan_cmd = 6;
+      static int current_tilt_cmd = 3;
+      int stop_threshold = 200; // hysteresis
+
+      // Pan logic
+      if (current_pan_cmd == 6) {
+          if (pan_delta > threshold) current_pan_cmd = 4;
+          else if (-pan_delta > threshold) current_pan_cmd = 5;
+      } else if (current_pan_cmd == 4) {
+          if (pan_delta < stop_threshold) current_pan_cmd = 6;
+      } else if (current_pan_cmd == 5) {
+          if (-pan_delta < stop_threshold) current_pan_cmd = 6;
+      }
+
+      // Tilt logic
+      if (current_tilt_cmd == 3) {
+          if (tilt_delta > threshold) current_tilt_cmd = 1;
+          else if (-tilt_delta > threshold) current_tilt_cmd = 2;
+      } else if (current_tilt_cmd == 1) {
+          if (tilt_delta < stop_threshold) current_tilt_cmd = 3;
+      } else if (current_tilt_cmd == 2) {
+          if (-tilt_delta < stop_threshold) current_tilt_cmd = 3;
+      }
+
+      // Dispatch sequentially: prioritize Pan
+      if (current_pan_cmd != 6) {
+        routeMotor(current_pan_cmd);
+        delay(300);    // Hold movement
+        routeMotor(6); // Stop pan
+        delay(500);    // Wait for system to settle
+      } else if (current_tilt_cmd != 3) {
+        routeMotor(current_tilt_cmd);
+        delay(300);    // Hold movement
+        routeMotor(3); // Stop tilt
+        delay(500);    // Wait for system to settle
+      } else {
+        routeMotor(9); // Stop all
+      }
     }
   }
 
-  Serial.printf("[Core1][%02d:%02d] Wind:%s Status:%s Hum:%.1f\n",
-    now.Hour(), now.Minute(), wind ? "ALERT" : "OK", (const char*)g_status, g_humidity);
+  Serial.printf("[Core1][%02d:%02d] Wind:%s Status:%s Hum:%.1f online:%d\n",
+    now.Hour(), now.Minute(), wind ? "ALERT" : "OK", (const char*)g_status, g_humidity, (int)g_online);
 }
 
 // ─── FREERTOS: CORE 0 — CLOUD STACK ──────────────────────────────────────────
@@ -673,8 +878,10 @@ void radioTask(void*) {
   vTaskDelay(2000 / portTICK_PERIOD_MS);
 
   unsigned long lastDec = 0;
+  unsigned long lastVib = 0;
   for (;;) {
     unsigned long now = millis();
+    if (now - lastVib >= 50) { lastVib = now; pollVibration(); }
     if (now - lastDec >= DEC_INTERVAL) { lastDec = now; decisionEngine(); }
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
@@ -715,6 +922,12 @@ void setup() {
 
   Rtc.Begin();
   if (!Rtc.GetIsRunning()) Rtc.SetIsRunning(true);
+  
+  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+  if (Rtc.GetDateTime() < compiled) {
+    Serial.println("[HW] RTC was out of date. Updating to compile time...");
+    Rtc.SetDateTime(compiled);
+  }
   Serial.println("[HW] DS1302 RTC OK");
 
   WiFi.mode(WIFI_STA);

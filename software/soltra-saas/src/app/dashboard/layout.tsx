@@ -72,9 +72,7 @@ export default async function DashboardLayout({
             <span>🤖</span> AI Overseer
           </a>
           <a
-            href={hudUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/dashboard/hud"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400 hover:border-red-950 transition-colors"
           >
             <span>🔺</span> System HUD

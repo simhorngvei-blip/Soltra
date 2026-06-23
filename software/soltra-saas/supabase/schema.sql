@@ -64,6 +64,7 @@ CREATE TABLE public.telemetry (
   wind_speed_ms REAL,                                       -- Wind speed (m/s)
   irradiance_wm2 REAL,                                      -- Solar irradiance (W/m²)
   lux           INTEGER,                                    -- True Lux brightness
+  ldr           REAL,                                       -- Light Dependent Resistor value
   uv_index      REAL,                                       -- UV Index
   battery_pct   INTEGER,                                    -- Battery level (0-100%)
   humidity_pct  REAL,                                       -- Humidity (%)
@@ -83,6 +84,7 @@ CREATE TABLE public.telemetry (
 -- ALTER TABLE public.telemetry RENAME COLUMN humidity TO humidity_pct;
 -- ALTER TABLE public.telemetry DROP COLUMN solar_yield;
 -- ALTER TABLE public.telemetry ADD COLUMN lux INTEGER;
+-- ALTER TABLE public.telemetry ADD COLUMN ldr REAL;
 -- ALTER TABLE public.telemetry ADD COLUMN uv_index REAL;
 -- ALTER TABLE public.telemetry ADD COLUMN battery_pct INTEGER;
 -- ============================================================

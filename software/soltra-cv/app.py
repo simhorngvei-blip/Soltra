@@ -126,16 +126,16 @@ def camera_thread():
 
                                     current_time = time.time()
                                     if (current_time - last_pub_time) > PUBLISH_RATE_S:
-                                        if pan_deg != 0.0 or tilt_deg != 0.0:
-                                            payload = {
-                                                "target_pan": round(pan_deg, 2),
-                                                "target_tilt": round(tilt_deg, 2),
-                                                "device_id": "Node4"
-                                            }
-                                            if mqtt_client:
-                                                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                                            print(f"[TRACKING] Sent override: {payload}")
-                                            last_pub_time = current_time
+                                        payload = {
+                                            "mode": "CV_SUN_TRACK",
+                                            "pan_delta": round(pan_deg, 2),
+                                            "tilt_delta": round(tilt_deg, 2),
+                                            "device_id": "Node4"
+                                        }
+                                        if mqtt_client:
+                                            mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                                        print(f"[TRACKING] Sent override: {payload}")
+                                        last_pub_time = current_time
 
                     if not sun_found:
                         cv2.putText(cv_frame, "SUN NOT DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)

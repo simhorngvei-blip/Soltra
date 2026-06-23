@@ -60,6 +60,7 @@ typedef struct {
   int ldr_value;
   float uv_index;
   float ir_ratio;
+  uint32_t lux;
   float battery_v;
 } SensorPkt;
 
@@ -319,13 +320,20 @@ void soltraSensorTask(void *pvParameters) {
   Serial.println("[Core 1] SOLTRA Sensor Task Started.");
   for(;;) {
     int ldr; float uv, ir, bat;
+    uint32_t lux;
     
-    readSensors(&ldr, &uv, &ir, &bat);
+    readSensors(&ldr, &uv, &ir, &lux, &bat);
+
+    int ldr_off = +268;
+    float uv_off = +3.4f;
+    ldr += ldr_off;
+    uv  += uv_off;
 
     txData.node_id = 4;
     txData.ldr_value = ldr;
     txData.uv_index  = uv;
     txData.ir_ratio  = ir;
+    txData.lux       = lux;
     txData.battery_v = bat;
 
     if (hub_paired) {

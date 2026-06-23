@@ -1,5 +1,5 @@
 // ═════════════════════════════════════════════
-// SOLTRA HARDWARE CONFIG — SENSOR NODE (PCB VERSION)
+// SOLTRA HARDWARE CONFIG — SENSOR NODE (UNIFIED)
 // Edit this block. Scroll down for the firmware.
 // ═════════════════════════════════════════════
 //
@@ -12,8 +12,13 @@
 //   Each sensor node must have a unique ID.
 //
 #define NODE_ID 1   // ← change to 1, 2, 3, or 4 for each board
-//
-// STEP 2 — TEST MODE
+
+// STEP 2 — HARDWARE TYPE
+//   Uncomment the line below if you are using the custom SOLTRA PCB.
+//   Leave it commented if you are testing on a bare XIAO ESP32-C3 on a breadboard.
+#define HARDWARE_PCB
+
+// STEP 3 — TEST MODE
 //   Uncomment the line below to disable deep sleep. This makes continuous 
 //   flashing and testing much easier as the USB serial port won't disconnect.
 //
@@ -25,7 +30,7 @@
 
 /*
  * PROJECT SOLTRA — Sensor Node (XIAO ESP32C3)
- * PCB Deployment Version
+ * Unified PCB & Breadboard Version
  * 
  * ─── ZERO-CONFIGURATION SETUP ────────────────────────────────────────────────
  * On FIRST boot, the node scans channels 1-13, broadcasting a Pairing Request.
@@ -33,12 +38,6 @@
  *
  * Hold BOOT (GPIO 9) on power-up to reset saved pairing and scan again.
  * ──────────────────────────────────────────────────────────────────────
- * 
- * Added Features:
- * - Power Indicator LED (D6)
- * - Solar Charging Indicator LED (D7)
- * - TX Indicator LED (D3)
- * - Software Toggle Switch (D10)
  */
 
 #include <WiFi.h>
@@ -56,16 +55,21 @@ const int BAT_PIN = A0;
 const int LDR_PIN = A1;
 const int UV_PIN  = A2;
 
-const int LED_TX_PIN      = D3;  // LED to signal TX to Heltec (Active LOW)
-const int LED_POWER_PIN   = D6;  // LED to indicate power is ON (Active HIGH)
-const int LED_CHARGE_PIN  = D7;  // LED to indicate solar charging
-const int CHARGE_STAT_PIN = D8;  // Input to detect solar charging (e.g. connected to Solar Voltage)
+#ifdef HARDWARE_PCB
+  const int LED_TX_PIN      = D3;  // LED to signal TX to Hub (Active LOW)
+  const int LED_POWER_PIN   = D6;  // LED to indicate power is ON (Active HIGH)
+  const int LED_CHARGE_PIN  = D7;  // LED to indicate solar charging
+  const int CHARGE_STAT_PIN = D8;  // Input to detect solar charging
+#else
+  const int LED_TX_PIN      = 5;   // GPIO 5 is D3 on XIAO ESP32C3
+#endif
 
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
 bool tsl_found = false;
 
 Preferences prefs;
 
+// ⚠️ MUST MATCH MASTER HUB EXACTLY ⚠️
 typedef struct {
   int node_id;
   int ldr_value;
@@ -91,6 +95,7 @@ esp_now_peer_info_t peerInfo;
 uint8_t HUB_MAC[6] = {0};
 bool hub_paired = false;
 volatile bool got_ack = false;
+int active_wifi_channel = 1;
 
 void OnDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
   Serial.printf("[ESP-NOW] TX %s\n", status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAIL");
@@ -118,14 +123,67 @@ void clearConfig() {
   Serial.println("[Prefs] Config cleared");
 }
 
+void readAndTransmitData() {
+  if (!hub_paired) return;
+
+  int raw_bat   = analogRead(BAT_PIN);
+  float battery_v = (raw_bat / 4095.0) * 3.3 * 2.0;
+  int ldr_raw   = 4095 - analogRead(LDR_PIN);
+  int uv_raw    = analogRead(UV_PIN);
+  float uv_voltage = (uv_raw / 4095.0) * 3.3;
+  float uv_index   = uv_voltage / 0.1;
+  float ir_ratio   = 0.0;
+  uint32_t lux     = 0;
+
+  if (tsl_found) {
+    uint32_t lum = tsl.getFullLuminosity();
+    uint16_t ir  = lum >> 16;
+    uint16_t full = lum & 0xFFFF;
+    ir_ratio = (full > 0) ? ((float)ir / (float)full) : 0.0;
+    lux = tsl.calculateLux(full, ir);
+  }
+
+  // ── Per-Node Calibration ────────────────────────────────────────────────
+  float ldr_mult = 1.0; int ldr_off = 0;
+  float uv_mult  = 1.0; float uv_off  = 0.0;
+  float ir_mult  = 1.0; float ir_off  = 0.0;
+
+  if      (NODE_ID == 1) { /* Baseline — no adjustment */ }
+  else if (NODE_ID == 2) { /* Node 2 calibration — add offsets when known */ }
+  else if (NODE_ID == 3) { ldr_off = -659; ir_off = -0.17; }
+  else if (NODE_ID == 4) { /* Node 4 calibration — add offsets when known */ }
+
+  ldr_raw  = max(0, (int)(ldr_raw * ldr_mult) + ldr_off);
+  uv_index = max(0.0f, (float)(uv_index * uv_mult) + uv_off);
+  ir_ratio = max(0.0f, (float)(ir_ratio * ir_mult) + ir_off);
+
+  txData.node_id   = NODE_ID;
+  txData.ldr_value = ldr_raw;
+  txData.uv_index  = uv_index;
+  txData.ir_ratio  = ir_ratio;
+  txData.lux       = lux;
+  txData.battery_v = battery_v;
+
+  Serial.printf("Node %d | CH:%d | Bat:%.2fV | LDR:%d | UV:%.2f | IR:%.2f | Lux:%d\n",
+    NODE_ID, active_wifi_channel, battery_v, ldr_raw, uv_index, ir_ratio, lux);
+
+  esp_now_send(HUB_MAC, (uint8_t*)&txData, sizeof(txData));
+
+  // Flash TX LED to indicate data sent
+  digitalWrite(LED_TX_PIN, LOW); 
+  delay(50); 
+  digitalWrite(LED_TX_PIN, HIGH);
+}
+
 void setup() {
   Serial.begin(115200);
 
   // Initialize LEDs
   pinMode(LED_TX_PIN, OUTPUT);
+#ifdef HARDWARE_PCB
   pinMode(LED_POWER_PIN, OUTPUT);
   pinMode(LED_CHARGE_PIN, OUTPUT);
-  pinMode(CHARGE_STAT_PIN, INPUT_PULLUP); // Or INPUT if detecting a HIGH signal
+  pinMode(CHARGE_STAT_PIN, INPUT_PULLDOWN); // Expecting a HIGH signal when charging
 
   // Default states for LEDs
   digitalWrite(LED_TX_PIN, HIGH);
@@ -136,17 +194,22 @@ void setup() {
   digitalWrite(LED_POWER_PIN, HIGH); 
 
   // Check Solar Charging Status
-  // (Adjust the logic depending on how your PCB detects charging)
-  if (digitalRead(CHARGE_STAT_PIN) == LOW) {
+  if (digitalRead(CHARGE_STAT_PIN) == HIGH) {
     digitalWrite(LED_CHARGE_PIN, HIGH);
   }
-
+#else
+  digitalWrite(LED_TX_PIN, HIGH);
+#endif
 
   unsigned long start_wait = millis();
   while (!Serial && millis() - start_wait < 3000) { delay(10); }
 
   Serial.printf("\n==========================================\n");
+#ifdef HARDWARE_PCB
   Serial.printf("   SOLTRA SENSOR NODE %d (PCB)\n", NODE_ID);
+#else
+  Serial.printf("   SOLTRA SENSOR NODE %d (BREADBOARD)\n", NODE_ID);
+#endif
   Serial.printf("==========================================\n");
 
   // ── Check BOOT button for clear ──────────────────────────────────────────
@@ -161,7 +224,7 @@ void setup() {
   esp_wifi_set_promiscuous(true);
 
   prefs.begin("soltra-node", false);
-  int wifi_channel = prefs.getInt("wifi_channel", -1);
+  active_wifi_channel = prefs.getInt("wifi_channel", -1);
   size_t mac_len = prefs.getBytesLength("hub_mac");
   if (mac_len == 6) {
     prefs.getBytes("hub_mac", HUB_MAC, 6);
@@ -169,9 +232,9 @@ void setup() {
   }
   prefs.end();
 
-  if (wifi_channel == -1 || !hub_paired) {
+  if (active_wifi_channel == -1 || !hub_paired) {
     Serial.println("[Setup] Not paired. Scanning channels for Hub...");
-    if (esp_now_init() != ESP_OK) goto sleep_now;
+    if (esp_now_init() != ESP_OK) return;
     esp_now_register_recv_cb(onRecv);
 
     uint8_t broadcast_mac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -194,10 +257,10 @@ void setup() {
       
       delay(150);
       if (got_ack) {
-        wifi_channel = ch;
+        active_wifi_channel = ch;
         found = true;
         prefs.begin("soltra-node", false);
-        prefs.putInt("wifi_channel", wifi_channel);
+        prefs.putInt("wifi_channel", active_wifi_channel);
         prefs.putBytes("hub_mac", HUB_MAC, 6);
         prefs.end();
         break;
@@ -205,25 +268,26 @@ void setup() {
     }
     
     if (!found) {
-      Serial.println("[Setup] Hub not found. Sleeping and retrying later.");
-      goto sleep_now;
+      Serial.println("[Setup] Hub not found. Rebooting to try again...");
+      delay(2000);
+      ESP.restart();
     }
   }
 
-  esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_channel(active_wifi_channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(false);
 
   esp_now_deinit();
-  if (esp_now_init() != ESP_OK) goto sleep_now;
+  if (esp_now_init() != ESP_OK) return;
   
   esp_now_register_send_cb(OnDataSent);
   
   memcpy(peerInfo.peer_addr, HUB_MAC, 6);
-  peerInfo.channel = wifi_channel;
+  peerInfo.channel = active_wifi_channel;
   peerInfo.encrypt = false;
   esp_now_add_peer(&peerInfo);
 
-  // ── Read sensors ──────────────────────────────────────────────────────────
+  // ── Init I2C Sensors ────────────────────────────────────────────────────────
   analogSetAttenuation(ADC_11db);
   Wire.begin();
   if (tsl.begin()) {
@@ -232,69 +296,16 @@ void setup() {
     tsl_found = true;
   }
 
-read_sensors_label:
-  {
-    int raw_bat   = analogRead(BAT_PIN);
-    float battery_v = (raw_bat / 4095.0) * 3.3 * 2.0;
-    int ldr_raw   = 4095 - analogRead(LDR_PIN);
-    int uv_raw    = analogRead(UV_PIN);
-    float uv_voltage = (uv_raw / 4095.0) * 3.3;
-    float uv_index   = uv_voltage / 0.1;
-    float ir_ratio   = 0.0;
-    uint32_t lux     = 0;
-
-    if (tsl_found) {
-      uint32_t lum = tsl.getFullLuminosity();
-      uint16_t ir  = lum >> 16;
-      uint16_t full = lum & 0xFFFF;
-      ir_ratio = (full > 0) ? ((float)ir / (float)full) : 0.0;
-      lux = tsl.calculateLux(full, ir);
-    }
-
-    // ── Per-Node Calibration ────────────────────────────────────────────────
-    float ldr_mult = 1.0; int ldr_off = 0;
-    float uv_mult  = 1.0; float uv_off  = 0.0;
-    float ir_mult  = 1.0; float ir_off  = 0.0;
-
-    if      (NODE_ID == 1) { /* Baseline — no adjustment */ }
-    else if (NODE_ID == 2) { /* Node 2 calibration — add offsets when known */ }
-    else if (NODE_ID == 3) { ldr_off = -659; ir_off = -0.17; }
-    else if (NODE_ID == 4) { /* Node 4 calibration — add offsets when known */ }
-
-    ldr_raw  = max(0, (int)(ldr_raw * ldr_mult) + ldr_off);
-    uv_index = max(0.0f, (float)(uv_index * uv_mult) + uv_off);
-    ir_ratio = max(0.0f, (float)(ir_ratio * ir_mult) + ir_off);
-
-    txData.node_id   = NODE_ID;
-    txData.ldr_value = ldr_raw;
-    txData.uv_index  = uv_index;
-    txData.ir_ratio  = ir_ratio;
-    txData.lux       = lux;
-    txData.battery_v = battery_v;
-
-    Serial.printf("Node %d | CH:%d | Bat:%.2fV | LDR:%d | UV:%.2f | IR:%.2f\n",
-      NODE_ID, wifi_channel, battery_v, ldr_raw, uv_index, ir_ratio);
-
-    esp_now_send(HUB_MAC, (uint8_t*)&txData, sizeof(txData));
-
-    // Flash TX LED to indicate data sent
-    digitalWrite(LED_TX_PIN, LOW); 
-    delay(50); 
-    digitalWrite(LED_TX_PIN, HIGH);
-  }
-
-sleep_now:
+#ifndef DISABLE_DEEP_SLEEP
+  // If deep sleep is enabled, run once and sleep immediately.
+  readAndTransmitData();
+  
   // Turn off indicator LEDs before sleeping to save battery
+#ifdef HARDWARE_PCB
   digitalWrite(LED_POWER_PIN, LOW);
   digitalWrite(LED_CHARGE_PIN, LOW);
+#endif
 
-#ifdef DISABLE_DEEP_SLEEP
-  Serial.println("[TEST] Delaying 2s instead of sleeping...");
-  // Turn power LED back on for the next read
-  digitalWrite(LED_POWER_PIN, HIGH);
-  delay(2000);
-  goto read_sensors_label;
-#else
   Serial.println("[SLEEP] Deep sleep 2s...");
   esp_sleep_enable_timer_wakeup(2000000ULL);
   esp_deep_sleep_start();
@@ -302,5 +313,18 @@ sleep_now:
 }
 
 void loop() {
-  // Empty — deep sleep restarts from setup()
+#ifdef DISABLE_DEEP_SLEEP
+  // If deep sleep is disabled, loop indefinitely
+  readAndTransmitData();
+
+#ifdef HARDWARE_PCB
+  // Ensure power LED is ON during loop
+  digitalWrite(LED_POWER_PIN, HIGH);
+#endif
+
+  Serial.println("[TEST] Delaying 2s instead of sleeping...");
+  delay(2000);
+#else
+  // Empty — Deep sleep restarts from setup()
+#endif
 }

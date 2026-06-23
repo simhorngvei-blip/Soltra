@@ -1,4 +1,4 @@
-﻿// ─── Supabase DB Types ────────────────────────────────────────────────────────
+// ─── Supabase DB Types ────────────────────────────────────────────────────────
 
 export type UserRole         = 'homeowner' | 'fleet_admin'
 export type SubscriptionTier = 'free' | 'pro' | 'enterprise'
@@ -46,6 +46,11 @@ export interface TelemetryRecord {
   tilt_angle:  number | null
   wind_speed:  number | null
   irradiance:  number | null    // solar irradiance W/m² (from firmware solar_yield)
+  humidity:    number | null
+  lux:         number | null
+  ldr:         number | null
+  uv_index:    number | null
+  battery_pct: number | null
   wind_alert:  boolean
   node_status: string | null
 }
@@ -57,11 +62,19 @@ export interface TelemetryRecord {
 
 export interface NormalizedTelemetry {
   timestamp:   string          // HH:MM:SS for chart x-axis
+  recorded_at: string          // Full ISO date string
   solar_yield: number | null   // irradiance W/m²
   wind_speed:  number | null   // m/s
   panel_angle: number | null   // degrees
   wind_alert:  boolean
   status:      string | null
+  watts:       number | null
+  volts:       number | null
+  lux:         number | null
+  ldr:         number | null
+  uv_index:    number | null
+  humidity:    number | null
+  battery_pct: number | null
 }
 
 /** Convert a DB TelemetryRecord to NormalizedTelemetry for chart consumption */
@@ -73,11 +86,19 @@ export function adaptTelemetryRecord(record: TelemetryRecord): NormalizedTelemet
       minute:  '2-digit',
       second:  '2-digit',
     }),
+    recorded_at: record.recorded_at,
     solar_yield: record.irradiance,
     wind_speed:  record.wind_speed,
     panel_angle: record.pan_angle,
     wind_alert:  record.wind_alert,
     status:      record.node_status,
+    watts:       record.watts,
+    volts:       record.volts,
+    lux:         record.lux,
+    ldr:         record.ldr,
+    uv_index:    record.uv_index,
+    humidity:    record.humidity,
+    battery_pct: record.battery_pct,
   }
 }
 
