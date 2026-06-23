@@ -5,6 +5,7 @@ import './App.css';
 import DigitalTwinEnv from './components/DigitalTwinEnv';
 import VrmAvatar from './components/VrmAvatar';
 import CubeLoader from './components/ui/cube-loader';
+import { HomeownerOverlay } from './components/dashboard/HomeownerOverlay';
 
 /* ─── Error Boundary: isolates Canvas crashes from the UI overlay ─── */
 class CanvasErrorBoundary extends Component {
@@ -121,6 +122,14 @@ export default function App() {
           />
         </Canvas>
       </CanvasErrorBoundary>
+
+      <HomeownerOverlay 
+        nodeId="node-1" 
+        nodeMac="00:1A:2B:3C:4D:5E" 
+        nodeLabel="Primary Array" 
+        siteName="Soltra HQ" 
+        siteTimezone="UTC" 
+      />
 
       <CustomLoader />
     </div>
