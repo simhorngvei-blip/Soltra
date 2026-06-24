@@ -71,12 +71,7 @@ export default async function DashboardLayout({
           >
             <span>🤖</span> AI Overseer
           </a>
-          <a
-            href="/dashboard/hud"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400 hover:border-red-950 transition-colors"
-          >
-            <span>🔺</span> System HUD
-          </a>
+
           <div className="h-px bg-zinc-800/50 my-2" />
           <a
             href="/dashboard/settings"
