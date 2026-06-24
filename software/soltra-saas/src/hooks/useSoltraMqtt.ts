@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import mqtt, { MqttClient } from 'mqtt'
+// @ts-ignore
+import mqtt from 'mqtt/dist/mqtt.min'
+import type { MqttClient } from 'mqtt'
 import type { LiveTelemetry } from '@/lib/types'
 
 interface UseSoltraMqttOptions {

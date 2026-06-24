@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import mqtt from 'mqtt'
+// @ts-ignore
+import mqtt from 'mqtt/dist/mqtt.min'
 
 const BROKER    = 'wss://5679a4b63e0c47a6bf63aeb14d328cdd.s1.eu.hivemq.cloud:8884/mqtt'
 const TOPIC     = 'helios/telemetry'
