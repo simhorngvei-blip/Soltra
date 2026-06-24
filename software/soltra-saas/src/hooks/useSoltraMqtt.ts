@@ -76,7 +76,7 @@ export function useSoltraMqtt({
       client.subscribe(subscribeTopic, { qos: 0 })
     })
 
-    client.on('message', (incomingTopic, payload) => {
+    client.on('message', (incomingTopic: string, payload: Buffer) => {
       if (incomingTopic !== subscribeTopic) return
       try {
         const data = JSON.parse(payload.toString()) as LiveTelemetry

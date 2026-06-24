@@ -46,7 +46,7 @@ export function useLocalNodesMqtt() {
     client.on('error', () => setConnected(false))
     client.on('close', () => setConnected(false))
 
-    client.on('message', (topic, payload) => {
+    client.on('message', (topic: string, payload: Buffer) => {
       try {
         const d = JSON.parse(payload.toString())
         const now = new Date()
