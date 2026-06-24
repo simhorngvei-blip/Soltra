@@ -87,7 +87,7 @@ export function useSoltraMqtt({
       }
     })
 
-    client.on('error', (err) => {
+    client.on('error', (err: Error) => {
       setError(err.message)
       setIsConnecting(false)
     })
