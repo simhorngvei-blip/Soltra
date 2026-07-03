@@ -431,6 +431,11 @@ See [LICENSE](LICENSE) for details.
 
 New to contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for a beginner-friendly guide.
 
+### 🚧 Open for Development: Raspberry Pi Kiosk!
+The `raspberry_pi_deploy` folder contains the beginnings of an automated setup script to turn a Raspberry Pi into a dedicated physical monitor for Soltra. Originally, the plan was to mount a Raspberry Pi with an LCD screen directly to the solar panel and run the Mobile HUD (or VRM dashboard) on it natively in "Kiosk Mode."
+
+**This feature is currently incomplete and underdeveloped.** We are actively looking for contributors to help finish the Raspberry Pi kiosk integration! If you have a Pi and want to help, jump into `raspberry_pi_deploy` and submit a Pull Request.
+
 ## 🔍 Understanding the Codebase
 
 Want to understand what every file and folder does? Read [CODEBASE_EXPLANATION.md](CODEBASE_EXPLANATION.md).

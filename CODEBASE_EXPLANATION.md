@@ -317,6 +317,22 @@ This runs on every single page load. It checks if the user is logged in and redi
 
 ---
 
+## 🍓 `raspberry_pi_deploy/` — Physical Kiosk Setup
+
+**Think of it as:** A deployment package to turn a standard Raspberry Pi into a dedicated physical monitor/kiosk for Soltra.
+
+**Background & Future Plans:** Originally, the Raspberry Pi comes with an LCD screen attachment. The long-term plan is to take the mobile HUD (or the VRM dashboard, once completed, as the current one has multiple issues and is incomplete) and move it entirely onto the Raspberry Pi screen. 
+
+> ⚠️ **Status:** This section of the project is **currently underdeveloped and highly experimental**. It is fully open for development for anyone who wants to contribute and finish the kiosk integration!
+
+**Key files:**
+
+| File | What it does |
+|------|--------------|
+| `setup_pi.sh` | An automation script that installs NGINX, Chromium, and OpenCV, deploys the HUD locally, and forces the Pi to boot immediately into a full-screen, locked "Kiosk Mode" showing the dashboard. |
+
+---
+
 ## 📁 Root-Level Files
 
 These are the most important files in the top-level `Soltra/` folder:
