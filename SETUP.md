@@ -260,6 +260,14 @@ https://unique-random-name.trycloudflare.com
 
 ---
 
+## Step 10 — Run the Technician HUDs (Optional)
+
+If you want to use the local, low-latency HUD:
+1. **Web HUD:** Run `cd software/soltra-hud && npm install && npm run dev` and open `http://localhost:5173`.
+2. **Mobile App:** Run `cd software/soltra-hud-mobile && npm install && npm run build && npx cap sync && npx cap open android` to launch the project in Android Studio, then install it to your phone via USB.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |

@@ -181,6 +181,33 @@ Open your browser to `http://localhost:5174`
 
 ---
 
+### Step 3.5 — Set Up the Technician HUDs (Optional)
+
+Soltra comes with a low-latency "Cockpit HUD" for technicians, available as both a web app and a mobile app.
+
+**To run the Web HUD:**
+```bash
+# Open a NEW terminal window
+cd software/soltra-hud
+npm install
+npm run dev
+```
+Open your browser to `http://localhost:5173`.
+
+**To build the Mobile HUD (Android):**
+1. You need [Android Studio](https://developer.android.com/studio) installed.
+2. In your terminal, run:
+```bash
+cd software/soltra-hud-mobile
+npm install
+npm run build
+npx cap sync
+npx cap open android
+```
+3. Android Studio will open. From there, you can connect your phone via USB and click the **Play** button to install the app on your device!
+
+---
+
 ### Step 4 — Set Up the Voice Assistant (TTS)
 
 This is the Python server that gives Soltra its voice. It runs on your computer.
