@@ -27,6 +27,39 @@ export function initMqtt(config?: { host?: string, user?: string, pass?: string 
     client = null;
   }
 
+  // --- FAKE DATA INJECTION FOR SCREENSHOTS ---
+  mqttStatus.set('CONNECTED (SIMULATED)');
+  setInterval(() => {
+    const raw = JSON.stringify({
+      wind_speed_ms: (Math.random() * 3 + 1).toFixed(2),
+      irradiance_wm2: Math.floor(Math.random() * 200 + 800),
+      pan_angle_deg: Math.floor(Math.random() * 180),
+      tilt_angle_deg: Math.floor(Math.random() * 45 + 10),
+      battery_pct: Math.floor(Math.random() * 10 + 90),
+      lux: Math.floor(Math.random() * 5000 + 50000),
+      uv_index: (Math.random() * 2 + 6).toFixed(1),
+      humidity_pct: Math.floor(Math.random() * 10 + 50),
+      power_watts: (Math.random() * 20 + 150).toFixed(1),
+      panel_volts: (Math.random() * 2 + 16).toFixed(1),
+      wind_alert: false,
+      status: 'TRACKING_ACTIVE',
+      node_mac: 'A4:CF:12:F1:C9:8B'
+    });
+    
+    const timestamp = new Date().toLocaleTimeString('en-GB');
+    
+    logs.update(prev => {
+      const newLogs = [...prev, { topic: 'helios/telemetry', payload: raw, timestamp }];
+      if (newLogs.length > 50) newLogs.shift();
+      return newLogs;
+    });
+
+    const data = JSON.parse(raw);
+    telemetry.update(prev => ({ ...prev, ...data }));
+  }, 1500);
+  return;
+  // ------------------------------------------
+
   const host = config?.host || import.meta.env.VITE_HIVEMQ_HOST || 'XXXXXXXX.s1.eu.hivemq.cloud';
   const user = config?.user || import.meta.env.VITE_HIVEMQ_USER || 'helios_hub';
   const pass = config?.pass || import.meta.env.VITE_HIVEMQ_PASS || 'your_password_here';

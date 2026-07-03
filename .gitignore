@@ -67,9 +67,25 @@ yarn-error.log*
 # ─── Lock files (committed per sub-project, not root) ────────────────────────
 package-lock.json
 
-# --- Private / Sensitive -------------------------------------------------------
+# ─── Private / Sensitive ────────────────────────────────────────────────────
 Helios_Final_Report/
 NEW_SB
 
-# Documentation
+# ─── Documentation (internal dev notes) ──────────────────────────────────────
 docs/
+
+# ─── Dev / Scratch Files ─────────────────────────────────────────────────────
+debug.txt
+history_summary.txt
+full_prompt.txt
+options.txt
+cv_url.txt
+stream_url.txt
+3M_video_presentation
+ngrok*.log
+
+# ─── Screenshots & Local Media ───────────────────────────────────────────────
+local-screenshot.png
+*.png
+!public/**/*.png
+!**/assets/**/*.png

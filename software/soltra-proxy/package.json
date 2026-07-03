@@ -1,0 +1,12 @@
+{
+  "name": "soltra-proxy",
+  "version": "1.0.0",
+  "description": "Ngrok reverse proxy to split traffic to CV, TTS, and Ollama",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

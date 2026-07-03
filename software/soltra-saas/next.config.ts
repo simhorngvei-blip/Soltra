@@ -7,7 +7,7 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data: blob: https:;
-  connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.open-meteo.com https://*.spline.design;
+  connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.open-meteo.com https://*.spline.design wss://*.hivemq.cloud:8884 wss://*.hivemq.cloud;
   frame-src https://js.stripe.com;
   worker-src 'self' blob:;
   object-src 'none';

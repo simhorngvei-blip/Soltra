@@ -59,24 +59,26 @@ export function useTTS(): UseTTSReturn {
 
     setIsGenerating(true)
     setError(null)
-
     try {
-      const res = await fetch('/api/tts', {
+      const TTS_URL = import.meta.env.VITE_TTS_URL ?? 'http://127.0.0.1:8099'
+      const resolvedProfileId = options.profileId || 'af_bella'
+
+      const formData = new FormData()
+      formData.append('text', text.trim())
+      formData.append('profile_id', resolvedProfileId)
+      formData.append('language', options.language ?? 'en-us')
+
+      const res = await fetch(`${TTS_URL}/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text:       text.trim(),
-          profile_id: options.profileId,
-          language:   options.language ?? 'en-us',
-        }),
+        body: formData,
       })
 
       // ── Handle error responses ────────────────────────────────────────────
       if (!res.ok) {
         let errorMessage = 'TTS failed'
         try {
-          const errBody = await res.json() as { error?: string }
-          errorMessage = errBody.error ?? errorMessage
+          const errBody = await res.json() as { error?: string, detail?: string }
+          errorMessage = errBody.detail ?? errBody.error ?? errorMessage
         } catch { /* ignore parse error */ }
 
         if (res.status === 429) {

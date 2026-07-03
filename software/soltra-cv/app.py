@@ -8,8 +8,23 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+from inference_sdk import InferenceHTTPClient
+
 app = Flask(__name__)
 CORS(app)
+
+ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY")
+if ROBOFLOW_API_KEY:
+    CLIENT = InferenceHTTPClient(
+        api_url="https://serverless.roboflow.com",
+        api_key=ROBOFLOW_API_KEY
+    )
+else:
+    CLIENT = None
 
 # ─── HiveMQ Configuration ────────────────────────────────────────────────────
 MQTT_HOST    = "5679a4b63e0c47a6bf63aeb14d328cdd.s1.eu.hivemq.cloud"
@@ -198,6 +213,26 @@ def stop_tracking():
 @app.route('/api/track/status', methods=['GET'])
 def get_status():
     return jsonify({"is_tracking": is_tracking})
+
+@app.route('/api/weather', methods=['GET'])
+def get_weather():
+    if not CLIENT:
+        return jsonify({"error": "Roboflow API key not configured"}), 500
+    
+    with frame_condition:
+        frame_bytes = latest_raw_frame
+        
+    if frame_bytes is None:
+        return jsonify({"error": "No camera frame available"}), 503
+        
+    try:
+        with open("temp_weather.jpg", "wb") as f:
+            f.write(frame_bytes)
+            
+        result = CLIENT.infer("temp_weather.jpg", model_id="weather-wcilw/1")
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)

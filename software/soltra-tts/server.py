@@ -34,11 +34,16 @@ PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 # Kokoro files expected in root directory
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 KOKORO_MODEL_PATH = os.path.join(ROOT_DIR, "kokoro-v1.0.onnx")
-KOKORO_VOICES_PATH = os.path.join(ROOT_DIR, "voices.json")
+KOKORO_VOICES_PATH = os.path.join(ROOT_DIR, "voices.bin")
 
 ALLOWED_ORIGINS = [
     "https://soltra.vercel.app",
-    "http://localhost:3000"
+    "https://soltra-dashboard.vercel.app",
+    "https://soltra-saas.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "*"
 ]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -102,8 +107,13 @@ def _load_kokoro_sync():
         import builtins
         _orig_open = builtins.open
         def _utf8_open(*args, **kwargs):
-            if 'voices.json' in str(args[0]) and 'encoding' not in kwargs and 'b' not in kwargs.get('mode', 'r'):
-                kwargs['encoding'] = 'utf-8'
+            try:
+                filename = str(args[0])
+                mode = args[1] if len(args) > 1 else kwargs.get('mode', 'r')
+                if 'voices.json' in filename and 'encoding' not in kwargs and 'b' not in mode:
+                    kwargs['encoding'] = 'utf-8'
+            except Exception:
+                pass
             return _orig_open(*args, **kwargs)
         builtins.open = _utf8_open
         try:

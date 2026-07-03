@@ -1,0 +1,183 @@
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(56,189,248,0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.08);
+  transform: translateY(-2px);
+}
+
+@keyframes flashAnim {
+  0%   { box-shadow: 0 0 0 2px rgba(56,189,248,0.0); }
+  40%  { box-shadow: 0 0 0 3px rgba(56,189,248,0.5); border-color: rgba(56,189,248,0.6); }
+  100% { box-shadow: 0 0 0 2px rgba(56,189,248,0.0); }
+}
+
+.flash {
+  animation: flashAnim 0.6s ease-out;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.nodeId {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.nodeName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.nodePos {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* LDR */
+.section { display: flex; flex-direction: column; gap: 6px; }
+
+.ldrRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ldrValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ldrBarWrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ldrBar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease, background 0.3s;
+}
+
+/* Metrics */
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metricLabel {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metricValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.metricUnit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Battery */
+.batRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.battIcon {
+  display: flex;
+  align-items: center;
+}
+
+.battBody {
+  width: 22px;
+  height: 10px;
+  border: 1.5px solid var(--muted-light);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.battFill {
+  height: 100%;
+  transition: width 0.5s ease, background 0.3s;
+}
+
+.battNub {
+  width: 3px;
+  height: 5px;
+  background: var(--muted-light);
+  border-radius: 0 1px 1px 0;
+}
+
+.footer {
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+}

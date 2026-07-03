@@ -38,7 +38,13 @@
 //   and ignore Ephemeris/Sun-position, Night-time reset, and Low-light standby.
 //   Useful for testing auto-tracking with a flashlight indoors.
 //
-#define FORCE_LDR_TEST_MODE 1
+#define FORCE_LDR_TEST_MODE 0
+//
+// STEP 7 — EPHEMERIS TOGGLE
+//   Change this to false to permanently disable Ephemeris (Sun-position) tracking fallback.
+//   You can also toggle this at runtime via MQTT ("ephemeris_on" / "ephemeris_off").
+//
+#define ENABLE_EPHEMERIS false
 //
 // ═════════════════════════════════════════════
 // END CONFIG — do not edit below unless you know what you're doing
@@ -187,6 +193,13 @@ volatile char    g_status[24]  = "booting";
 volatile unsigned long g_manual_timeout = 0;
 volatile bool    g_ai_override = false;
 volatile char    g_ai_mode[16] = "";
+volatile bool    g_ephemeris_enabled = ENABLE_EPHEMERIS;
+
+// ─── Mobile app workaround state ─────────────────────────────────────────────
+volatile unsigned long g_auto_stop_pan = 0;
+volatile unsigned long g_auto_stop_tilt = 0;
+volatile unsigned long g_last_start_pan = 0;
+volatile unsigned long g_last_start_tilt = 0;
 
 // ─── ESP-NOW PACKETS ─────────────────────────────────────────────────────────
 typedef struct {
@@ -337,6 +350,16 @@ void mqttCb(char* topic, byte* payload, unsigned int len) {
       Serial.println("[MQTT] AI Mode: AUTO (ephemeris)");
       return;
     }
+    if (msg.indexOf("ephemeris_off") >= 0) {
+      g_ephemeris_enabled = false;
+      Serial.println("[MQTT] Ephemeris Disabled");
+      return;
+    }
+    if (msg.indexOf("ephemeris_on") >= 0) {
+      g_ephemeris_enabled = true;
+      Serial.println("[MQTT] Ephemeris Enabled");
+      return;
+    }
 
     // ── CV Sun Tracker: parse pan_delta / tilt_delta from sun_tracker.py ────
     // Payload format: {"mode":"CV_SUN_TRACK","pan_delta":1.5,"tilt_delta":-0.8,...}
@@ -395,6 +418,34 @@ void mqttCb(char* topic, byte* payload, unsigned int len) {
   if (strcmp(topic, TOPIC_CTRL_MANUAL) == 0 && cmd >= 1 && cmd <= 9) {
     Serial.printf("[MQTT] Manual cmd: %d → motor\n", cmd);
     g_manual_timeout = millis() + 60000;
+
+    // WORKAROUND: The mobile app either sends a STOP command (3 or 6) immediately
+    // or fails to send it at all due to its disabled-button logic on touchscreens.
+    // We enforce a minimum movement duration of 600ms and ignore rapid stops.
+    unsigned long now = millis();
+    if (cmd == 1 || cmd == 2) {
+      g_last_start_tilt = now;
+      g_auto_stop_tilt = now + 600;
+    } else if (cmd == 4 || cmd == 5) {
+      g_last_start_pan = now;
+      g_auto_stop_pan = now + 600;
+    } else if (cmd == 3) {
+      if (now - g_last_start_tilt < 400) {
+        Serial.println("[MQTT] Ignoring rapid STOP tilt (mobile app bug workaround)");
+        return;
+      }
+      g_auto_stop_tilt = 0;
+    } else if (cmd == 6) {
+      if (now - g_last_start_pan < 400) {
+        Serial.println("[MQTT] Ignoring rapid STOP pan (mobile app bug workaround)");
+        return;
+      }
+      g_auto_stop_pan = 0;
+    } else if (cmd == 9) {
+      g_auto_stop_tilt = 0;
+      g_auto_stop_pan = 0;
+    }
+
     routeMotor(cmd);
   }
 }
@@ -461,6 +512,19 @@ void routeMotor(int cmd) {
   } else if (cmd == 9) {
     last_pan_cmd = 6; last_pan_time = now_ms; last_pan_change = now_ms;
     last_tilt_cmd = 3; last_tilt_time = now_ms; last_tilt_change = now_ms;
+  }
+
+  if (cmd == 1 || cmd == 2 || cmd == 4 || cmd == 5) {
+    int stopCmd = (cmd == 1 || cmd == 2) ? 3 : 6;
+    Serial.printf("[ESP-NOW] Over-the-air soft start for cmd %d...\n", cmd);
+    for (int i = 0; i < 3; i++) {
+      txPkt.command = cmd;
+      esp_now_send(MOTOR_MAC, (uint8_t*)&txPkt, sizeof(txPkt));
+      delay(15 + i * 10); // Increasing ON duration: 15ms, 25ms, 35ms
+      txPkt.command = stopCmd;
+      esp_now_send(MOTOR_MAC, (uint8_t*)&txPkt, sizeof(txPkt));
+      delay(10); // 10ms OFF duration
+    }
   }
 
   txPkt.command = cmd;
@@ -680,10 +744,14 @@ void decisionEngine() {
     strncpy((char*)g_status, "low_light_standby", 24);
     is_standby = true;
   } else if (ai_over && strcmp(ai_md, "ephemeris") == 0) {
-    use_ephemeris = true;
-    strncpy((char*)g_status, "ai_ephemeris", 24);
+    if (g_ephemeris_enabled) {
+      use_ephemeris = true;
+      strncpy((char*)g_status, "ai_ephemeris", 24);
+    } else {
+      strncpy((char*)g_status, "tracking", 24);
+    }
   } else {
-    if (abs(g_pan_angle - sun_azimuth) > 15.0 && g_irradiance < 300.0) {
+    if (g_ephemeris_enabled && abs(g_pan_angle - sun_azimuth) > 15.0 && g_irradiance < 300.0) {
       use_ephemeris = true;
       strncpy((char*)g_status, "ephemeris_fb", 24);
     } else {
@@ -739,11 +807,11 @@ void decisionEngine() {
 
       // Tilt logic
       if (current_tilt_cmd == 3) {
-          if (tilt_delta > threshold) current_tilt_cmd = 1;
-          else if (-tilt_delta > threshold) current_tilt_cmd = 2;
-      } else if (current_tilt_cmd == 1) {
-          if (tilt_delta < stop_threshold) current_tilt_cmd = 3;
+          if (tilt_delta > threshold) current_tilt_cmd = 2;
+          else if (-tilt_delta > threshold) current_tilt_cmd = 1;
       } else if (current_tilt_cmd == 2) {
+          if (tilt_delta < stop_threshold) current_tilt_cmd = 3;
+      } else if (current_tilt_cmd == 1) {
           if (-tilt_delta < stop_threshold) current_tilt_cmd = 3;
       }
 
@@ -954,5 +1022,19 @@ void loop() {
       routeMotor(cmd);
     }
   }
+
+  // Handle auto-stop for manual MQTT commands
+  unsigned long now = millis();
+  if (g_auto_stop_tilt > 0 && now > g_auto_stop_tilt) {
+    g_auto_stop_tilt = 0;
+    Serial.println("[AUTO-STOP] Tilt");
+    routeMotor(3);
+  }
+  if (g_auto_stop_pan > 0 && now > g_auto_stop_pan) {
+    g_auto_stop_pan = 0;
+    Serial.println("[AUTO-STOP] Pan");
+    routeMotor(6);
+  }
+
   vTaskDelay(50 / portTICK_PERIOD_MS);
 }
